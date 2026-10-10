@@ -36,9 +36,14 @@ pub struct CommentData {
     /// Redundant copy of the anchored text, the re-anchor fallback.
     pub quote: Option<String>,
     /// Present only for comments anchored to lines inside a fenced code block.
+    /// Line numbers, **inclusive at both ends** (`start..end` mirrors TS `{from, to}`).
     pub code_lines: Option<Range<usize>>,
     pub thread: Vec<ThreadEntry>,
     pub reactions: Vec<Reaction>,
+    /// Unknown header fields, kept verbatim (e.g. `foo:bar`, `x:"a b"`) and re-emitted after the
+    /// known fields so edits never drop them. Not part of the TS reference.
+    #[serde(default)]
+    pub extra_header: Vec<String>,
 }
 
 /// A comment as found in a document, with resolved byte ranges for each piece.
