@@ -384,7 +384,7 @@ async fn security() {
         )
         .await;
     assert_eq!(s, 200);
-    assert!(body.contains("WebSocket"));
+    assert!(body.to_lowercase().contains("<html"));
     let (s, _, body) = h
         .call(
             req("GET", "/")

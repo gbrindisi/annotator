@@ -3,7 +3,7 @@ import { cidAt, markOrder, marksFor, sortComments, styleMarks } from '../marks';
 import type { CommentView } from '../protocol';
 
 const c = (id: string, extra: Partial<CommentView> = {}): CommentView => ({
-  id, status: 'open', quote: id, author: 'a', created_at: null, orphaned: false, code_lines: null, entries: [], new_entries: 0, new_thread: false, ...extra,
+  id, status: 'open', quote: id, author: 'a', created_at: null, orphaned: false, code_lines: null, anchor: null, entries: [], new_entries: 0, new_thread: false, ...extra,
 });
 
 const html = '<p data-sourcepos="1:1-1:9"><mark data-cid="b">x</mark> and <em><mark data-cid="a">y</mark></em><mark data-cid="a">z</mark></p><p><mark data-cid="r">q</mark></p>';

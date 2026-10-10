@@ -403,7 +403,8 @@ async fn security_checks() {
         .await
         .unwrap();
     assert_eq!(r.status(), 200);
-    assert!(r.text().await.unwrap().contains("WebSocket"));
+    // Either the built UI (web/dist) or the fallback page, depending on the build.
+    assert!(r.text().await.unwrap().to_lowercase().contains("<html"));
     let r = http
         .get(d.url("/"))
         .header("cookie", d.cookie())

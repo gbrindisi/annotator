@@ -11,6 +11,14 @@ const hash = (s: string): string => {
 };
 
 /** Marker/body ranges (UTF-16). Good enough for the fixture (skips the example fence). */
+/** Dev-only: the real daemon computes anchors; the mock scans markers. */
+const fakeAnchor = (raw: string, id: string): [number, number] | null => {
+  const open = `<!--c:${id}-->`;
+  const a = raw.indexOf(open);
+  const b = raw.indexOf(`<!--/c:${id}-->`);
+  return a >= 0 && b > a ? [a + open.length, b] : null;
+};
+
 export const fakeMarkerRanges = (raw: string): [number, number][] => {
   const out: [number, number][] = [];
   const re = /<!--\/?c:[^\s>]+?-->|\n?<!--co:[\s\S]*?-->/g;
@@ -30,23 +38,23 @@ const initialComments = (): CommentView[] => [
       { author: 'kyle', timestamp: '2026-06-17T10:00:00.000Z', text: 'I thought we agreed Thursday?' },
       { author: 'sam', timestamp: '2026-06-17T10:05:00.000Z', text: 'Thursday is better for QA.' },
     ],
-    new_entries: 0, new_thread: false,
+    anchor: null, new_entries: 0, new_thread: false,
   },
   {
     id: 'a7b2', status: 'open', quote: 'another highlighted span', author: 'sam', created_at: '2026-06-17T10:05:00.000Z', orphaned: false, code_lines: null,
-    entries: [{ author: 'sam', timestamp: '2026-06-17T10:05:00.000Z', text: 'Two anchors near each other.' }], new_entries: 0, new_thread: false,
+    anchor: null, entries: [{ author: 'sam', timestamp: '2026-06-17T10:05:00.000Z', text: 'Two anchors near each other.' }], new_entries: 0, new_thread: false,
   },
   {
     id: 'zz1q', status: 'resolved', quote: 'resolved', author: 'kyle', created_at: '2026-06-17T09:00:00.000Z', orphaned: false, code_lines: null,
-    entries: [{ author: 'kyle', timestamp: '2026-06-17T09:00:00.000Z', text: 'Handled.' }], new_entries: 0, new_thread: false,
+    anchor: null, entries: [{ author: 'kyle', timestamp: '2026-06-17T09:00:00.000Z', text: 'Handled.' }], new_entries: 0, new_thread: false,
   },
   {
     id: 'p7k2', status: 'open', quote: '    validate(order)', author: 'agent', created_at: null, orphaned: false, code_lines: [1, 1],
-    entries: [{ author: 'agent', timestamp: null, text: 'should this run before logging?' }], new_entries: 0, new_thread: false,
+    anchor: null, entries: [{ author: 'agent', timestamp: null, text: 'should this run before logging?' }], new_entries: 0, new_thread: false,
   },
   {
     id: 'orph1', status: 'open', quote: 'deleted text', author: 'me', created_at: '2026-06-17T12:00:00.000Z', orphaned: true, code_lines: null,
-    entries: [{ author: 'me', timestamp: '2026-06-17T12:00:00.000Z', text: 'orphaned thread' }], new_entries: 0, new_thread: false,
+    anchor: null, entries: [{ author: 'me', timestamp: '2026-06-17T12:00:00.000Z', text: 'orphaned thread' }], new_entries: 0, new_thread: false,
   },
 ];
 
@@ -91,7 +99,9 @@ class FakeDaemon {
   }
 
   pushDoc(): void {
-    this.push({ type: 'doc', ...structuredClone(this.state) });
+    const doc = structuredClone(this.state);
+    for (const c of doc.comments) c.anchor = fakeAnchor(doc.raw, c.id);
+    this.push({ type: 'doc', ...doc });
   }
 
   error(message: string, reloaded = false): void {
@@ -133,7 +143,7 @@ class FakeDaemon {
           ok = true;
         });
         if (!ok) return this.error('Could not anchor the selection (cross-block or stale)');
-        s.comments.push({ id, status: 'open', quote: m.selection.text, author, created_at: now(), orphaned: false, code_lines: null, entries: [{ author, timestamp: now(), text: m.body }], new_entries: 0, new_thread: s.round > 1 });
+        s.comments.push({ id, status: 'open', quote: m.selection.text, author, created_at: now(), orphaned: false, code_lines: null, anchor: null, entries: [{ author, timestamp: now(), text: m.body }], new_entries: 0, new_thread: s.round > 1 });
         break;
       }
       case 'add_comment_raw': {
@@ -145,7 +155,7 @@ class FakeDaemon {
           `\n<!--co:${id} by:${author} at:${now()} status:open quote:${JSON.stringify(quote)}\n${author}: ${m.body}\n-->` + raw.slice(lineEnd);
         this.setRaw(next);
         // The fake daemon does not re-render: the thread shows up as unanchored in rendered mode.
-        s.comments.push({ id, status: 'open', quote, author, created_at: now(), orphaned: false, code_lines: null, entries: [{ author, timestamp: now(), text: m.body }], new_entries: 0, new_thread: s.round > 1 });
+        s.comments.push({ id, status: 'open', quote, author, created_at: now(), orphaned: false, code_lines: null, anchor: null, entries: [{ author, timestamp: now(), text: m.body }], new_entries: 0, new_thread: s.round > 1 });
         break;
       }
       case 'reply': {
@@ -230,7 +240,7 @@ class FakeDaemon {
       k.entries.push({ author: 'agent', timestamp: now(), text: 'Moved to Thursday, see the new paragraph below.' });
       k.new_entries = 1;
     }
-    s.comments.push({ id: 'ag01', status: 'open', quote: 'Thursday as the release day', author: 'agent', created_at: now(), orphaned: false, code_lines: null, entries: [{ author: 'agent', timestamp: now(), text: 'Added this; please confirm.' }], new_entries: 1, new_thread: true });
+    s.comments.push({ id: 'ag01', status: 'open', quote: 'Thursday as the release day', author: 'agent', created_at: now(), orphaned: false, code_lines: null, anchor: null, entries: [{ author: 'agent', timestamp: now(), text: 'Added this; please confirm.' }], new_entries: 1, new_thread: true });
     this.setRaw(s.raw.replace('Here is a second', 'Here is a **rewritten** second'));
     this.pushDoc();
   }

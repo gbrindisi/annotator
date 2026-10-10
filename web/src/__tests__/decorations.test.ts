@@ -4,6 +4,8 @@ import { anchorSpans, hiddenSpans } from '../decorations';
 import { buildDecorations } from '../source';
 
 const raw = 'We 👍 <!--c:k3-->ship it<!--/c:k3--> now.\n<!--co:k3 status:open\nme: hi\n-->\nend';
+const anchorFrom = raw.indexOf('<!--c:k3-->') + 11;
+const comments = (status = 'open') => [{ id: 'k3', status, anchor: [anchorFrom, anchorFrom + 7] as [number, number] }] as any;
 const ranges = (): [number, number][] => {
   const open = raw.indexOf('<!--c:k3-->');
   const close = raw.indexOf('<!--/c:k3-->');
@@ -18,15 +20,15 @@ describe('marker ranges -> decorations', () => {
     ]);
   });
 
-  it('finds anchored text between open/close markers (UTF-16 positions)', () => {
-    const spans = anchorSpans(raw, ranges());
+  it('uses daemon-provided anchor ranges (UTF-16 positions)', () => {
+    const spans = anchorSpans(comments(), raw.length);
     expect(spans).toHaveLength(1);
     expect(raw.slice(spans[0].from, spans[0].to)).toBe('ship it');
     expect(spans[0].id).toBe('k3');
   });
 
   it('builds replace + mark decorations usable by CodeMirror', () => {
-    const { hidden, anchors } = buildDecorations(raw, ranges(), new Set(['k3']));
+    const { hidden, anchors } = buildDecorations(raw, ranges(), comments('resolved'));
     const state = EditorState.create({ doc: raw });
     expect(state.doc.length).toBe(raw.length); // CodeMirror positions are UTF-16 too
     const h: [number, number][] = [];

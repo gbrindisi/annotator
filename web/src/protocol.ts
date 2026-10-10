@@ -36,6 +36,8 @@ export interface CommentView {
   orphaned: boolean;
   /** 0-based inclusive lines inside a fenced code block. */
   code_lines: [number, number] | null;
+  /** UTF-16 range of the anchored text in `raw`, when anchored. */
+  anchor: [number, number] | null;
   entries: EntryView[];
   new_entries: number;
   new_thread: boolean;

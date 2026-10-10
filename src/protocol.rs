@@ -151,6 +151,8 @@ pub struct CommentView {
     pub orphaned: bool,
     /// Anchored to lines of a fenced code block (`line:`), 0-based inclusive lines.
     pub code_lines: Option<(usize, usize)>,
+    /// UTF-16 range of the anchored text in `raw` (between the markers), when anchored.
+    pub anchor: Option<(usize, usize)>,
     pub entries: Vec<EntryView>,
     /// Entries added since the last Done snapshot (round > 1), e.g. agent replies. 0 in round 1.
     pub new_entries: usize,

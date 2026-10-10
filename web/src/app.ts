@@ -194,13 +194,12 @@ export class App {
   }
 
   private syncSource(doc: DocState, force: boolean): void {
-    const resolved = new Set(doc.comments.filter(c => c.status === 'resolved').map(c => c.id));
     const local = this.editor.text();
     if (this.lastSent !== null && doc.raw === this.lastSent) {
       // Echo of our own autosave.
       this.baseHash = doc.hash;
       this.lastSent = null;
-      if (!this.dirty && local === doc.raw) this.editor.setDoc(doc.raw, doc.marker_ranges, resolved);
+      if (!this.dirty && local === doc.raw) this.editor.setDoc(doc.raw, doc.marker_ranges, doc.comments);
       return;
     }
     if ((this.dirty || this.lastSent !== null) && local !== doc.raw && !force) {
@@ -208,16 +207,16 @@ export class App {
       this.showNotice();
       return;
     }
-    this.acceptDoc(doc, resolved);
+    this.acceptDoc(doc);
   }
 
-  private acceptDoc(doc: DocState, resolved = new Set(doc.comments.filter(c => c.status === 'resolved').map(c => c.id))): void {
+  private acceptDoc(doc: DocState): void {
     window.clearTimeout(this.saveTimer);
     this.dirty = false;
     this.lastSent = null;
     this.stale = null;
     this.baseHash = doc.hash;
-    this.editor.setDoc(doc.raw, doc.marker_ranges, resolved);
+    this.editor.setDoc(doc.raw, doc.marker_ranges, doc.comments);
     this.notice.hidden = true;
   }
 

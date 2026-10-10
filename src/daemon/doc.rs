@@ -15,14 +15,18 @@ pub fn comment_views(raw: &str, previous: Option<&str>) -> Vec<CommentView> {
             .map(|c| (c.id, c.data.thread.len()))
             .collect()
     });
+    let idx = Utf16Index::new(raw);
     parse_comments(raw)
         .into_iter()
-        .map(|c| view(c, prev.as_ref()))
+        .map(|c| view(c, prev.as_ref(), &idx))
         .collect()
 }
 
-fn view(c: ParsedComment, prev: Option<&HashMap<String, usize>>) -> CommentView {
+fn view(c: ParsedComment, prev: Option<&HashMap<String, usize>>, idx: &Utf16Index) -> CommentView {
     let orphaned = c.is_orphan();
+    let anchor = c
+        .anchor_range()
+        .map(|r| (idx.from_byte(r.start), idx.from_byte(r.end)));
     let n = c.data.thread.len();
     let (new_thread, new_entries) = match prev {
         None => (false, 0),
@@ -44,6 +48,7 @@ fn view(c: ParsedComment, prev: Option<&HashMap<String, usize>>) -> CommentView 
         created_at: d.created_at,
         orphaned,
         code_lines: d.code_lines.map(|r| (r.start, r.end)),
+        anchor,
         entries: d
             .thread
             .into_iter()

@@ -5,16 +5,17 @@ import { markdown } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, defaultHighlightStyle, HighlightStyle } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { anchorSpans, hiddenSpans } from './decorations';
+import type { CommentView } from './protocol';
 
-const setMarkers = StateEffect.define<{ raw: string; ranges: [number, number][]; resolved: Set<string> }>();
+const setMarkers = StateEffect.define<{ raw: string; ranges: [number, number][]; comments: CommentView[] }>();
 
 const hideDeco = Decoration.replace({});
 
-export const buildDecorations = (raw: string, ranges: [number, number][], resolved: Set<string> = new Set()): { hidden: DecorationSet; anchors: DecorationSet } => {
+export const buildDecorations = (raw: string, ranges: [number, number][], comments: CommentView[] = []): { hidden: DecorationSet; anchors: DecorationSet } => {
   const b = new RangeSetBuilder<Decoration>();
   for (const s of hiddenSpans(ranges, raw.length)) b.add(s.from, s.to, hideDeco);
-  const marks: Range<Decoration>[] = anchorSpans(raw, ranges).map(s =>
-    Decoration.mark({ class: resolved.has(s.id) ? 'cm-anchor is-resolved' : 'cm-anchor', attributes: { 'data-cid': s.id } }).range(s.from, s.to),
+  const marks: Range<Decoration>[] = anchorSpans(comments, raw.length).map(s =>
+    Decoration.mark({ class: s.resolved ? 'cm-anchor is-resolved' : 'cm-anchor', attributes: { 'data-cid': s.id } }).range(s.from, s.to),
   );
   return { hidden: b.finish(), anchors: Decoration.set(marks, true) };
 };
@@ -22,7 +23,7 @@ export const buildDecorations = (raw: string, ranges: [number, number][], resolv
 const markerField = StateField.define<{ hidden: DecorationSet; anchors: DecorationSet }>({
   create: () => ({ hidden: Decoration.none, anchors: Decoration.none }),
   update(value, tr) {
-    for (const e of tr.effects) if (e.is(setMarkers)) return buildDecorations(e.value.raw, e.value.ranges, e.value.resolved);
+    for (const e of tr.effects) if (e.is(setMarkers)) return buildDecorations(e.value.raw, e.value.ranges, e.value.comments);
     if (!tr.docChanged) return value;
     return { hidden: value.hidden.map(tr.changes), anchors: value.anchors.map(tr.changes) };
   },
@@ -88,7 +89,7 @@ export class SourceEditor {
   }
 
   /** Replace the document keeping cursor and scroll where possible. */
-  setDoc(raw: string, ranges: [number, number][], resolved: Set<string>): void {
+  setDoc(raw: string, ranges: [number, number][], comments: CommentView[]): void {
     const cur = this.view.state;
     const sel = cur.selection.main;
     const scroller = this.view.scrollDOM;
@@ -100,7 +101,7 @@ export class SourceEditor {
       this.view.dispatch({
         changes: same ? undefined : { from: 0, to: cur.doc.length, insert: raw },
         selection: { anchor: clamp(sel.anchor), head: clamp(sel.head) },
-        effects: setMarkers.of({ raw, ranges, resolved }),
+        effects: setMarkers.of({ raw, ranges, comments }),
       });
     } finally {
       this.applying = false;

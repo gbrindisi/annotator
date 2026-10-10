@@ -17,30 +17,13 @@ export const hiddenSpans = (ranges: [number, number][], len: number): Span[] => 
   return out;
 };
 
-/**
- * Anchored text spans: the visible text between an opening anchor marker range and its
- * closing one. Only the first characters of each hidden range are inspected to tell opening
- * from closing anchors; the comment format itself stays the daemon's business.
- */
-export const anchorSpans = (raw: string, ranges: [number, number][]): (Span & { id: string })[] => {
-  const spans = hiddenSpans(ranges, raw.length);
-  const out: (Span & { id: string })[] = [];
-  const open = new Map<string, number>();
-  for (const s of spans) {
-    const text = raw.slice(s.from, s.to);
-    // A merged range may contain several markers; scan all of them.
-    const re = /<!--(\/?)c:([^\s>-][^\s>]*?)-->/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(text))) {
-      const id = m[2];
-      if (!m[1]) open.set(id, s.from + m.index + m[0].length);
-      else if (open.has(id)) {
-        const from = open.get(id)!;
-        const to = s.from + m.index;
-        open.delete(id);
-        if (to > from) out.push({ id, from, to });
-      }
-    }
-  }
-  return out.sort((a, b) => a.from - b.from);
-};
+/** Anchored text spans (UTF-16), as computed by the daemon (`CommentView.anchor`). */
+export const anchorSpans = (
+  comments: { id: string; status: string; anchor: [number, number] | null }[],
+  len: number,
+): (Span & { id: string; resolved: boolean })[] =>
+  comments
+    .filter(c => c.anchor !== null)
+    .map(c => ({ id: c.id, resolved: c.status === 'resolved', from: Math.max(0, c.anchor![0]), to: Math.min(len, c.anchor![1]) }))
+    .filter(s => s.to > s.from)
+    .sort((a, b) => a.from - b.from);
