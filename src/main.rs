@@ -53,7 +53,7 @@ fn main() -> anyhow::Result<()> {
         Cmd::Status => annotator::client::status(),
         Cmd::Stop => annotator::client::stop(),
         Cmd::Skill => {
-            println!("TODO: embed skill/SKILL.md");
+            print!("{}", include_str!("../skill/SKILL.md"));
             Ok(())
         }
     }
