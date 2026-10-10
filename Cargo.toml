@@ -18,6 +18,9 @@ axum = { version = "0.8", features = ["ws"] }
 clap = { version = "4", features = ["derive"] }
 comrak = { version = "0.56", default-features = false }
 dirs = "6"
+futures-util = "0.3.34"
+getrandom = "0.3"
+libc = "0.2.190"
 mime_guess = "2"
 notify = "8"
 regex = "1"
@@ -33,5 +36,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
+http-body-util = "0.1.5"
+hyper = { version = "1.12.0", features = ["server", "http1"] }
+hyper-util = { version = "0.1.21", features = ["tokio", "service"] }
 pretty_assertions = "1"
 tempfile = "3"
+tokio-tungstenite = "0.26"
+tower = { version = "0.5.3", features = ["util"] }
