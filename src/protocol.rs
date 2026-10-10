@@ -161,3 +161,35 @@ pub struct Change {
     /// `data-sourcepos` of the changed block in the current render, when known.
     pub sourcepos: Option<String>,
 }
+
+// ---------- daemon status (additive) ----------
+
+/// `GET /api/status`
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct StatusResponse {
+    pub pid: u32,
+    pub port: u16,
+    pub uptime_secs: u64,
+    pub sessions: Vec<SessionStatus>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SessionStatus {
+    pub id: String,
+    pub path: String,
+    pub round: u32,
+    /// `active`, `done` or `abandoned`.
+    pub state: String,
+    /// Connected WebSocket clients (browser tabs).
+    pub clients: usize,
+    /// Pending `wait` long-polls.
+    pub waiters: usize,
+}
+
+/// Contents of `daemon.json`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DaemonInfo {
+    pub pid: u32,
+    pub port: u16,
+    pub token: String,
+}

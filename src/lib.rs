@@ -11,3 +11,4 @@ pub mod mapping;
 pub mod protocol;
 pub mod render;
 pub mod session;
+pub mod summary;

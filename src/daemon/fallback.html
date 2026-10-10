@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>annotator</title>
+<style>
+body { font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+header { padding: 6px 10px; background: #eee; display: flex; gap: 10px; align-items: center; }
+main { flex: 1; display: flex; min-height: 0; }
+#view, #src { flex: 1; overflow: auto; margin: 0; padding: 10px; }
+#src { font-family: monospace; border: none; border-left: 1px solid #ccc; resize: none; }
+#status { color: #666; flex: 1; }
+</style>
+</head>
+<body>
+<header>
+  <strong id="path">annotator</strong><span id="status">connecting...</span>
+  <button id="done">Done</button><button id="abandon">Abandon</button>
+</header>
+<main><div id="view"></div><textarea id="src" spellcheck="false"></textarea></main>
+<script>
+const id = location.pathname.split('/').pop();
+const $ = (s) => document.getElementById(s);
+let ws, hash = null, timer = null, closed = false;
+function status(t) { $('status').textContent = t; }
+function send(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
+function flush() {
+  if (timer) { clearTimeout(timer); timer = null; send({ type: 'replace_source', text: $('src').value, base_hash: hash }); }
+}
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/' + id);
+  ws.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'doc') {
+      closed = false; hash = m.hash;
+      $('path').textContent = m.path + ' (round ' + m.round + ')';
+      $('view').innerHTML = m.html;
+      if (!timer && $('src').value !== m.raw) $('src').value = m.raw;
+      status('saved');
+    } else if (m.type === 'error') {
+      status('error: ' + m.message);
+    } else if (m.type === 'round_closed') {
+      closed = true; status('round ' + m.round + ' sent back; waiting for the next round');
+    }
+  };
+  ws.onopen = () => status('connected');
+  ws.onclose = () => { status('disconnected; retrying...'); setTimeout(connect, 1000); };
+}
+$('src').addEventListener('input', () => {
+  status('editing...'); clearTimeout(timer); timer = setTimeout(() => { timer = 1; flush(); }, 500);
+});
+$('done').onclick = () => { flush(); send({ type: 'done' }); };
+$('abandon').onclick = () => { if (confirm('Abandon this review?')) send({ type: 'abandon' }); };
+connect();
+</script>
+</body>
+</html>
