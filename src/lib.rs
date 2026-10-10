@@ -5,10 +5,14 @@
 
 pub mod assets;
 pub mod client;
+pub mod config;
 pub mod daemon;
+pub mod diff;
 pub mod format;
 pub mod mapping;
 pub mod protocol;
 pub mod render;
 pub mod session;
 pub mod summary;
+pub mod time;
+pub mod utf16;
