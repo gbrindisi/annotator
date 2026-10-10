@@ -279,3 +279,31 @@ fn comment_at_prefers_innermost() {
     assert_eq!(comment_at(&cs, doc.find("fox").unwrap()).unwrap().id, "aaa");
     assert!(comment_at(&cs, doc.len()).is_none());
 }
+
+#[test]
+fn adds_code_line_comment() {
+    let doc = "Intro\n\n```python\ndef f():\n    pass\n```\n\nAfter\n";
+    let start = doc.find("```").unwrap();
+    let end = doc.rfind("```").unwrap() + 3;
+    let (out, id) = add_code_comment(doc, start..end, 1, 1, &input("why pass?")).unwrap();
+    assert_eq!(id, "q4m2");
+    assert_eq!(
+        out,
+        "Intro\n\n<!--c:q4m2-->\n```python\ndef f():\n    pass\n```\n<!--/c:q4m2-->\n\
+         <!--co:q4m2 by:bomber at:2026-09-24T14:30:00.000Z status:open quote:\"    pass\" line:1\n\
+         bomber (2026-09-24T14:30:00.000Z): why pass?\n-->\n\nAfter\n"
+    );
+    let c = get(&out, "q4m2");
+    assert_eq!(c.data.code_lines, Some(1..1));
+    assert_eq!(c.data.quote.as_deref(), Some("    pass"));
+    assert!(c.is_anchored());
+    // Round trip: deleting restores the original.
+    assert_eq!(delete_comment(&out, "q4m2").unwrap(), doc);
+    // Multi-line range, block end given including the newline.
+    let (out, _) = add_code_comment(doc, start..end + 1, 0, 1, &input("x")).unwrap();
+    assert_eq!(
+        get(&out, "q4m2").data.quote.as_deref(),
+        Some("def f():\n    pass")
+    );
+    assert!(add_code_comment(doc, start..end, 0, 5, &input("x")).is_err());
+}

@@ -101,7 +101,12 @@ impl App {
                 round_state: RoundState::Done,
                 last_result: None,
             });
-        Ok(self.insert(Sess::new(id, canonical.to_path_buf(), meta)))
+        Ok(self.insert(Sess::new(
+            self.home.clone(),
+            id,
+            canonical.to_path_buf(),
+            meta,
+        )))
     }
 
     /// In-memory session, or one persisted on disk by an earlier daemon run.
@@ -117,7 +122,7 @@ impl App {
             return None;
         }
         let path = PathBuf::from(&meta.path);
-        Some(self.insert(Sess::new(id.to_string(), path, meta)))
+        Some(self.insert(Sess::new(self.home.clone(), id.to_string(), path, meta)))
     }
 
     pub fn status(&self) -> StatusResponse {
@@ -157,6 +162,7 @@ pub struct Inner {
 }
 
 pub struct Sess {
+    pub home: PathBuf,
     pub id: String,
     pub path: PathBuf,
     pub inner: Mutex<Inner>,
@@ -171,8 +177,9 @@ pub enum ReplaceError {
 }
 
 impl Sess {
-    fn new(id: String, path: PathBuf, meta: Meta) -> Sess {
+    fn new(home: PathBuf, id: String, path: PathBuf, meta: Meta) -> Sess {
         Sess {
+            home,
             id,
             path,
             inner: Mutex::new(Inner {
@@ -213,13 +220,32 @@ impl Sess {
     fn doc_locked(&self, i: &Inner) -> Result<DocState, String> {
         let raw = std::fs::read_to_string(&self.path)
             .map_err(|e| format!("{}: {e}", self.path.display()))?;
+        let round = i.meta.round;
+        let previous = (round > 1)
+            .then(|| {
+                std::fs::read_to_string(session::done_snapshot(&self.home, &self.id, round - 1))
+                    .ok()
+            })
+            .flatten();
         Ok(DocState {
             path: i.meta.path.clone(),
-            round: i.meta.round,
+            round,
             hash: session::sha256_hex(raw.as_bytes()),
             html: crate::render::render(&raw).html,
+            comments: super::doc::comment_views(&raw, previous.as_deref()),
+            marker_ranges: super::doc::marker_ranges(&raw),
+            changes: previous
+                .as_deref()
+                .map(|p| crate::diff::changes(p, &raw))
+                .unwrap_or_default(),
+            round_state: if i.meta.round_state == RoundState::Active {
+                "active"
+            } else {
+                "closed"
+            }
+            .into(),
+            author: crate::config::author(&self.home),
             raw,
-            ..Default::default()
         })
     }
 
@@ -268,6 +294,33 @@ impl Sess {
             return Err(ReplaceError::Conflict);
         }
         session::atomic_write(&self.path, text.as_bytes())
+            .map_err(|e| ReplaceError::Other(e.to_string()))?;
+        self.broadcast_doc_locked(&mut i);
+        Ok(())
+    }
+
+    /// Apply an edit to the current file content and write it back atomically, then broadcast
+    /// one Doc. `edit` gets the current raw text and returns the new text or a user message.
+    pub fn apply_edit(
+        &self,
+        edit: impl FnOnce(&str) -> Result<String, String>,
+    ) -> Result<(), ReplaceError> {
+        let mut i = self.inner.lock().unwrap();
+        if i.meta.round_state != RoundState::Active {
+            return Err(ReplaceError::Other(
+                "this round is closed (already sent back); wait for the next round".into(),
+            ));
+        }
+        let cur =
+            std::fs::read_to_string(&self.path).map_err(|e| ReplaceError::Other(e.to_string()))?;
+        let base = session::sha256_hex(cur.as_bytes());
+        let next = edit(&cur).map_err(ReplaceError::Other)?;
+        // Hash-checked: refuse if the file changed while we computed the edit.
+        let now = std::fs::read(&self.path).map_err(|e| ReplaceError::Other(e.to_string()))?;
+        if session::sha256_hex(&now) != base {
+            return Err(ReplaceError::Conflict);
+        }
+        session::atomic_write(&self.path, next.as_bytes())
             .map_err(|e| ReplaceError::Other(e.to_string()))?;
         self.broadcast_doc_locked(&mut i);
         Ok(())

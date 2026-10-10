@@ -5,7 +5,7 @@
 //! `mapping` translate positions in the rendered text back to raw byte offsets.
 //!
 //! Pipeline:
-//! 1. [`scan_markers`] finds open/close markers and body blocks (fenced and inline code masked).
+//! 1. [`scan_markers`] finds open/close markers and body blocks via `crate::format`.
 //! 2. [`strip`] removes them; a line that consisted only of markers/bodies is removed together
 //!    with its newline, so bodies never introduce blank lines that change block structure.
 //! 3. comrak parses `clean`. Text/code-span nodes carry precise inline sourcepos (verified in the
@@ -17,10 +17,8 @@
 
 use comrak::nodes::{AstNode, NodeValue, Sourcepos};
 use comrak::{Arena, Options};
-use regex::Regex;
 use std::collections::HashMap;
 use std::ops::Range;
-use std::sync::LazyLock;
 
 /// Output of [`render`].
 #[derive(Debug, Clone, Default)]
@@ -69,7 +67,7 @@ pub fn render(raw: &str) -> Rendered {
     }
 }
 
-// ---------- marker scanning (isolated; to be replaced by crate::format) ----------
+// ---------- marker scanning (delegates to crate::format) ----------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MarkerKind {
@@ -85,89 +83,27 @@ pub(crate) struct Marker {
     pub range: Range<usize>,
 }
 
-static OPEN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<!--c:([A-Za-z0-9]+)-->").unwrap());
-static CLOSE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"<!--/c:([A-Za-z0-9]+)-->").unwrap());
-static BODY_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"<!--co:([A-Za-z0-9]+)[ \t]*([^\n]*)\n?((?s:.)*?)-->").unwrap());
-static INLINE_CODE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"`+[^`\n]*`+").unwrap());
-static FENCE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[ \t]*(`{3,}|~{3,})").unwrap());
-
-/// Same rules as `parse.ts`: markers inside fenced code or inline code are literal text.
-/// Only the first open/close/body per id is a marker (later duplicates stay literal).
+/// Markers as found by [`crate::format::parse_comments`] (fenced and inline code masked; only
+/// the first open/close/body per id counts), sorted by position.
 pub(crate) fn scan_markers(doc: &str) -> Vec<Marker> {
-    let masks = masked_ranges(doc);
-    let masked = |i: usize| masks.iter().any(|r| i >= r.0 && i < r.1);
-    let mut out: Vec<Marker> = Vec::new();
-    // The regex crate uses leftmost-first semantics, so BODY_RE matches what the JS regex
-    // matches (greedy header, lazy thread).
-    for (kind, re) in [
-        (MarkerKind::Open, &*OPEN_RE),
-        (MarkerKind::Close, &*CLOSE_RE),
-        (MarkerKind::Body, &*BODY_RE),
-    ] {
-        let mut pos = 0;
-        while pos <= doc.len() {
-            let Some(c) = re.captures_at(doc, pos) else {
-                break;
-            };
-            let m = c.get(0).unwrap();
-            pos = m.end();
-            push_marker(&mut out, kind, &c[1], m.range(), &masked);
+    let mut out = Vec::new();
+    for c in crate::format::parse_comments(doc) {
+        for (kind, r) in [
+            (MarkerKind::Open, &c.open),
+            (MarkerKind::Close, &c.close),
+            (MarkerKind::Body, &c.body),
+        ] {
+            if let Some(range) = r {
+                out.push(Marker {
+                    kind,
+                    id: c.id.clone(),
+                    range: range.clone(),
+                });
+            }
         }
     }
     out.sort_by_key(|m| m.range.start);
     out
-}
-
-fn push_marker(
-    out: &mut Vec<Marker>,
-    kind: MarkerKind,
-    id: &str,
-    range: Range<usize>,
-    masked: &dyn Fn(usize) -> bool,
-) {
-    if masked(range.start) || out.iter().any(|m| m.kind == kind && m.id == id) {
-        return;
-    }
-    out.push(Marker {
-        kind,
-        id: id.to_string(),
-        range,
-    });
-}
-
-fn masked_ranges(doc: &str) -> Vec<(usize, usize)> {
-    let mut ranges = Vec::new();
-    let mut offset = 0;
-    let mut fence_start: Option<usize> = None;
-    let mut fence_char = ' ';
-    for line in doc.split('\n') {
-        let line_end = offset + line.len();
-        let marker = FENCE_RE
-            .captures(line)
-            .and_then(|c| c.get(1))
-            .and_then(|m| m.as_str().chars().next());
-        match (fence_start, marker) {
-            (None, Some(ch)) => {
-                fence_start = Some(offset);
-                fence_char = ch;
-            }
-            (Some(s), Some(ch)) if ch == fence_char => {
-                ranges.push((s, line_end));
-                fence_start = None;
-            }
-            _ => {}
-        }
-        offset = line_end + 1;
-    }
-    if let Some(s) = fence_start {
-        ranges.push((s, doc.len()));
-    }
-    for m in INLINE_CODE_RE.find_iter(doc) {
-        ranges.push((m.start(), m.end()));
-    }
-    ranges
 }
 
 // ---------- stripping ----------

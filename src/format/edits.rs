@@ -184,6 +184,86 @@ pub fn compute_add_comment(
     ])
 }
 
+/// Anchor a comment to lines `from_line..=to_line` (0-based, of the code content) of the code
+/// block at `block` (byte range of the whole block, fences included). Markers go on their own
+/// lines around the block, the body right after the close marker, as in the reference format:
+///
+/// ~~~text
+/// <!--c:ID-->
+/// ```lang
+/// code
+/// ```
+/// <!--/c:ID-->
+/// <!--co:ID by:.. status:open quote:"code" line:0
+/// ~~~
+pub fn compute_add_code_comment(
+    doc: &str,
+    block: Range<usize>,
+    from_line: usize,
+    to_line: usize,
+    id: &str,
+    input: &NewCommentInput,
+) -> EditResult {
+    if input.text.trim().is_empty() {
+        return Err(EditError::EmptyText);
+    }
+    let start = floor_boundary(doc, block.start);
+    let start = doc[..start].rfind('\n').map_or(0, |p| p + 1);
+    let mut end = floor_boundary(doc, block.end.max(start));
+    end = doc[end..].find('\n').map_or(doc.len(), |p| p + end);
+    if end > start && doc.as_bytes()[end - 1] == b'\r' {
+        end -= 1;
+    }
+    let text = &doc[start..end];
+    let lines: Vec<&str> = text.split('\n').map(|l| l.trim_end_matches('\r')).collect();
+    let fenced = lines
+        .first()
+        .is_some_and(|l| l.trim_start().starts_with("```") || l.trim_start().starts_with("~~~"));
+    let content: &[&str] = if fenced {
+        let close = lines.len() > 1
+            && lines.last().is_some_and(|l| {
+                let t = l.trim();
+                t.len() >= 3 && (t.chars().all(|c| c == '`') || t.chars().all(|c| c == '~'))
+            });
+        &lines[1..lines.len() - usize::from(close)]
+    } else {
+        &lines[..]
+    };
+    let (from_line, to_line) = (from_line.min(to_line), from_line.max(to_line));
+    if to_line >= content.len().max(1) {
+        return Err(EditError::InvalidSelection(
+            "Those code lines do not exist.".into(),
+        ));
+    }
+    let quote = content.get(from_line..=to_line).map(|l| l.join("\n"));
+    let data = CommentData {
+        author: Some(input.author.clone()),
+        created_at: Some(input.created_at.clone()),
+        status: CommentStatus::Open,
+        quote: quote.filter(|q| !q.is_empty()),
+        code_lines: Some(from_line..to_line),
+        thread: vec![ThreadEntry {
+            author: input.author.clone(),
+            timestamp: Some(input.created_at.clone()),
+            text: input.text.clone(),
+        }],
+        reactions: Vec::new(),
+        extra_header: Vec::new(),
+    };
+    Ok(vec![
+        Change {
+            from: start,
+            to: start,
+            insert: format!("{}\n", open_marker(id)),
+        },
+        Change {
+            from: end,
+            to: end,
+            insert: format!("\n{}\n{}", close_marker(id), serialize_body(id, &data)),
+        },
+    ])
+}
+
 /// When a selection is within one inline-code token, anchor the whole token.
 pub fn expand_inline_code_selection(doc: &str, from: usize, to: usize) -> Range<usize> {
     let b = doc.as_bytes();
@@ -502,6 +582,25 @@ pub fn add_comment(
         }
     };
     let changes = compute_add_comment(doc, from, to, &id, input)?;
+    Ok((apply_changes(doc, &changes), id))
+}
+
+/// Add a code-block line comment (see [`compute_add_code_comment`]); returns `(new_doc, id)`.
+pub fn add_code_comment(
+    doc: &str,
+    block: Range<usize>,
+    from_line: usize,
+    to_line: usize,
+    input: &NewCommentInput,
+) -> Result<(String, String), EditError> {
+    let id = match &input.id {
+        Some(id) => id.clone(),
+        None => {
+            let ids = super::parse::existing_ids(doc);
+            new_id(&ids.iter().map(String::as_str).collect::<Vec<_>>())
+        }
+    };
+    let changes = compute_add_code_comment(doc, block, from_line, to_line, &id, input)?;
     Ok((apply_changes(doc, &changes), id))
 }
 

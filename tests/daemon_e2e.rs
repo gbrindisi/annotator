@@ -323,7 +323,7 @@ async fn stale_replace_rejected_and_external_write_pushes() {
     let e = ws.recv().await;
     assert_eq!(
         (e["message"].as_str(), e["reloaded"].as_bool()),
-        (Some("not implemented"), Some(false))
+        (Some("Comment not found."), Some(false))
     );
 
     std::fs::write(&file, "changed externally\n").unwrap();
@@ -485,5 +485,5 @@ async fn client_respawns_killed_daemon() {
     ws.send(json!({"type":"done"})).await;
     let (code, out) = wait_child(client).await;
     assert_eq!(code, 0);
-    assert!(out.contains("no edits"), "{out}");
+    assert!(out.contains("no changes"), "{out}");
 }

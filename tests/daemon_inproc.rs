@@ -306,7 +306,7 @@ async fn replace_source_and_watcher() {
 
     ws.send(json!({"type":"reply","id":"x","body":"b"})).await;
     let e = ws.recv().await;
-    assert_eq!(e["message"], "not implemented");
+    assert_eq!(e["message"], "Comment not found.");
     assert_eq!(e["reloaded"], false);
 
     // Daemon write: exactly one Doc.
@@ -424,4 +424,297 @@ async fn security() {
         )
         .await;
     assert_eq!(s, 400);
+}
+
+const DOC: &str = "# Plan\n\nWe ship on **Friday** now.\n\n- first item\n- second item\n\n```py\na = 1\nb = 2\n```\n";
+
+impl Ws {
+    /// Next Doc message (skipping nothing else: errors fail the test).
+    async fn doc(&mut self) -> Value {
+        let m = self.recv().await;
+        assert_eq!(m["type"], "doc", "{m}");
+        m
+    }
+    async fn intent(&mut self, v: Value) -> Value {
+        self.send(v).await;
+        self.doc().await
+    }
+}
+
+fn comment_ids(raw: &str) -> Vec<String> {
+    annotator::format::parse_comments(raw)
+        .into_iter()
+        .map(|c| c.id)
+        .collect()
+}
+
+#[tokio::test]
+async fn comment_intents_end_to_end() {
+    let h = setup();
+    std::fs::write(h.home.join("config.toml"), "author = \"tester\"\n").unwrap();
+    let file = h.file("c.md", DOC);
+    let o = h.open(&file).await;
+    let mut ws = h.ws(&o.session_id).await;
+    let d = ws.doc().await;
+    assert_eq!(d["author"], "tester");
+    assert_eq!(d["round_state"], "active");
+    let html = d["html"].as_str().unwrap();
+    for sp in ["3:1-3:26", "3:12-3:21", "6:1-7:0", "8:1-11:3"] {
+        assert!(
+            html.contains(&format!("data-sourcepos=\"{sp}\"")),
+            "{sp}: {html}"
+        );
+    }
+
+    // Paragraph.
+    let sel = |sp: &str, text: &str, offset: usize| json!({"sourcepos": sp, "text": text, "offset": offset});
+    let d = ws
+        .intent(json!({"type":"add_comment","selection":sel("3:1-3:26","ship",3),"body":"when?"}))
+        .await;
+    let raw = d["raw"].as_str().unwrap().to_string();
+    let c = &d["comments"][0];
+    let id1 = c["id"].as_str().unwrap().to_string();
+    assert!(
+        raw.contains(&format!("We <!--c:{id1}-->ship<!--/c:{id1}--> on")),
+        "{raw}"
+    );
+    assert_eq!(c["quote"], "ship");
+    assert_eq!(c["author"], "tester");
+    assert_eq!(c["entries"][0]["text"], "when?");
+    assert!(c["created_at"].as_str().unwrap().ends_with('Z'));
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), raw);
+
+    // Bold span.
+    let d = ws
+        .intent(
+            json!({"type":"add_comment","selection":sel("3:12-3:21","Friday",0),"body":"sure?"}),
+        )
+        .await;
+    let raw = d["raw"].as_str().unwrap().to_string();
+    let id2 = comment_ids(&raw)[1].clone();
+    assert!(
+        raw.contains(&format!("**<!--c:{id2}-->Friday<!--/c:{id2}-->**")),
+        "{raw}"
+    );
+
+    // List item.
+    let d = ws
+        .intent(json!({"type":"add_comment","selection":sel("6:1-7:0","second",0),"body":"li"}))
+        .await;
+    let raw = d["raw"].as_str().unwrap().to_string();
+    let id3 = comment_ids(&raw)[2].clone();
+    assert!(
+        raw.contains(&format!("- <!--c:{id3}-->second<!--/c:{id3}--> item")),
+        "{raw}"
+    );
+
+    // Code block -> line comment.
+    let d = ws
+        .intent(json!({"type":"add_comment","selection":sel("8:1-11:3","b = 2",6),"body":"why 2"}))
+        .await;
+    let raw = d["raw"].as_str().unwrap().to_string();
+    let views = d["comments"].as_array().unwrap();
+    let code = views.iter().find(|c| !c["code_lines"].is_null()).unwrap();
+    assert_eq!(code["code_lines"], json!([1, 1]));
+    assert_eq!(code["quote"], "b = 2");
+    let id4 = code["id"].as_str().unwrap().to_string();
+    assert!(
+        raw.contains(&format!(
+            "<!--c:{id4}-->\n```py\na = 1\nb = 2\n```\n<!--/c:{id4}-->\n"
+        )),
+        "{raw}"
+    );
+    // marker_ranges hide all markers/bodies: what remains is the original document.
+    let u: Vec<u16> = raw.encode_utf16().collect();
+    let mut shown = Vec::new();
+    let mut last = 0;
+    for r in d["marker_ranges"].as_array().unwrap() {
+        let (a, b) = (
+            r[0].as_u64().unwrap() as usize,
+            r[1].as_u64().unwrap() as usize,
+        );
+        shown.extend_from_slice(&u[last..a]);
+        last = b;
+    }
+    shown.extend_from_slice(&u[last..]);
+    assert_eq!(String::from_utf16(&shown).unwrap(), DOC);
+
+    // Cross-block / not found: error, file untouched.
+    ws.send(json!({"type":"add_comment","selection":sel("3:1-3:26","nonexistent",0),"body":"x"}))
+        .await;
+    let e = ws.recv().await;
+    assert_eq!(e["type"], "error");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), raw);
+
+    // Reply, edit, delete entry, resolve, reopen, delete thread.
+    let d = ws
+        .intent(json!({"type":"reply","id":id1,"body":"Friday"}))
+        .await;
+    let c = &d["comments"][0];
+    assert_eq!(c["entries"].as_array().unwrap().len(), 2);
+    assert_eq!(c["entries"][1]["author"], "tester");
+    let d = ws
+        .intent(json!({"type":"edit_entry","id":id1,"entry":1,"body":"Monday"}))
+        .await;
+    assert_eq!(d["comments"][0]["entries"][1]["text"], "Monday");
+    let d = ws
+        .intent(json!({"type":"delete_entry","id":id1,"entry":0}))
+        .await;
+    assert_eq!(d["comments"][0]["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(d["comments"][0]["entries"][0]["text"], "Monday");
+    let d = ws.intent(json!({"type":"resolve","id":id1})).await;
+    assert_eq!(d["comments"][0]["status"], "resolved");
+    let d = ws.intent(json!({"type":"reopen","id":id1})).await;
+    assert_eq!(d["comments"][0]["status"], "open");
+    let d = ws.intent(json!({"type":"delete_thread","id":id1})).await;
+    let raw = d["raw"].as_str().unwrap();
+    assert!(!raw.contains(&id1));
+    assert!(raw.contains("We ship on"));
+    ws.send(json!({"type":"edit_entry","id":id2,"entry":7,"body":"x"}))
+        .await;
+    assert_eq!(ws.recv().await["message"], "That entry no longer exists.");
+
+    // Closed round rejects intents.
+    ws.send(json!({"type":"done"})).await;
+    loop {
+        if ws.recv().await["type"] == "round_closed" {
+            break;
+        }
+    }
+    let before = std::fs::read_to_string(&file).unwrap();
+    ws.send(json!({"type":"reply","id":id2,"body":"late"}))
+        .await;
+    let e = ws.recv().await;
+    assert_eq!(e["type"], "error");
+    assert!(e["message"].as_str().unwrap().contains("closed"), "{e}");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
+    assert_eq!(h.current_doc(&o.session_id).await["round_state"], "closed");
+}
+
+impl H {
+    /// Current Doc via a fresh connection (sent immediately on connect).
+    async fn current_doc(&self, id: &str) -> Value {
+        self.ws(id).await.doc().await
+    }
+}
+
+#[tokio::test]
+async fn raw_add_with_utf16_offsets() {
+    let h = setup();
+    let file = h.file("u.md", "Ça 🎉 marche bien\n");
+    let o = h.open(&file).await;
+    let mut ws = h.ws(&o.session_id).await;
+    ws.doc().await;
+    // "Ça 🎉 " = 2 + 1 + 2 + 1 = 6 UTF-16 units; "marche" = 6 more.
+    let d = ws
+        .intent(json!({"type":"add_comment_raw","from":6,"to":12,"body":"ok"}))
+        .await;
+    let raw = d["raw"].as_str().unwrap();
+    let id = d["comments"][0]["id"].as_str().unwrap();
+    assert!(
+        raw.starts_with(&format!("Ça 🎉 <!--c:{id}-->marche<!--/c:{id}--> bien\n")),
+        "{raw}"
+    );
+    assert_eq!(d["marker_ranges"][0][0], 6);
+    assert_eq!(d["comments"][0]["quote"], "marche");
+    ws.send(json!({"type":"add_comment_raw","from":0,"to":0,"body":"x"}))
+        .await;
+    assert_eq!(ws.recv().await["type"], "error");
+}
+
+#[tokio::test]
+async fn round_two_changes_new_entries_and_summary() {
+    let h = setup();
+    let file = h.file(
+        "r2.md",
+        "# T\n\nkeep <!--c:p7k2-->this<!--/c:p7k2-->\n<!--co:p7k2 by:agent status:open\nagent: ok?\n-->\n\nold para\n\ngone para\n",
+    );
+    let o = h.open(&file).await;
+    let id = o.session_id.clone();
+    let mut ws = h.ws(&id).await;
+    let d = ws.doc().await;
+    assert_eq!(d["comments"][0]["new_entries"], 0);
+    assert_eq!(d["comments"][0]["new_thread"], false);
+    assert!(d["changes"].as_array().unwrap().is_empty());
+
+    // Reviewer: reply, new comment, text edit.
+    ws.intent(json!({"type":"reply","id":"p7k2","body":"yes"}))
+        .await;
+    ws.intent(json!({"type":"add_comment","selection":{"sourcepos":"5:1-5:8","text":"old","offset":0},"body":"rewrite"}))
+        .await;
+    let d = h.current_doc(&id).await;
+    let raw = d["raw"]
+        .as_str()
+        .unwrap()
+        .replace("gone para\n", "gone para\nmore\n");
+    ws.send(json!({"type":"replace_source","text":raw,"base_hash":d["hash"]}))
+        .await;
+    ws.doc().await;
+    let new_id = comment_ids(&raw)[1].clone();
+
+    let (r, _) = tokio::join!(h.wait(&id, 1), async {
+        wait_waiters(&h, 1).await;
+        ws.send(json!({"type":"done"})).await;
+    });
+    let WaitResult::Done { summary, .. } = r else {
+        panic!("{r:?}")
+    };
+    assert_eq!(summary.new_threads, std::slice::from_ref(&new_id));
+    assert_eq!(summary.replied_threads, ["p7k2"]);
+    assert_eq!(
+        (
+            summary.edit_hunks,
+            summary.lines_added,
+            summary.lines_removed
+        ),
+        (1, 1, 0)
+    );
+    let text = annotator::summary::to_text(&summary);
+    assert!(
+        text.contains(&format!("- 1 new comment: {new_id}")),
+        "{text}"
+    );
+    assert!(
+        text.contains("- 1 reply on an existing comment: p7k2"),
+        "{text}"
+    );
+    assert!(text.contains("- edits: 1 hunk, +1 -0 lines"), "{text}");
+
+    // Agent: replies to the new thread, rewrites a paragraph, removes another.
+    let cur = std::fs::read_to_string(&file).unwrap();
+    let agent =
+        annotator::format::append_reply(&cur, &new_id, "2026-01-01T00:00:00.000Z", "agent", "done")
+            .unwrap()
+            .replace("\ngone para\nmore\n", "\nmore\n")
+            .replace("# T", "# Title");
+    std::fs::write(&file, &agent).unwrap();
+    assert_eq!(h.open(&file).await.round, 2);
+    let d = loop {
+        let m = ws.recv().await;
+        if m["type"] == "doc" && m["round"] == 2 && m["raw"] == agent.as_str() {
+            break m;
+        }
+    };
+    assert_eq!(d["round_state"], "active");
+    let views = d["comments"].as_array().unwrap();
+    let v = views.iter().find(|c| c["id"] == new_id.as_str()).unwrap();
+    assert_eq!(
+        (v["new_entries"].as_u64(), v["new_thread"].as_bool()),
+        (Some(1), Some(false))
+    );
+    let p = views.iter().find(|c| c["id"] == "p7k2").unwrap();
+    assert_eq!(p["new_entries"], 0);
+    let changes = d["changes"].as_array().unwrap();
+    let kinds: Vec<&str> = changes
+        .iter()
+        .map(|c| c["kind"].as_str().unwrap())
+        .collect();
+    assert_eq!(kinds, ["modified", "modified"], "{changes:?}");
+    assert_eq!(changes[0]["old_text"], "# T");
+    let html = d["html"].as_str().unwrap();
+    assert!(html.contains(&format!(
+        "data-sourcepos=\"{}\"",
+        changes[0]["sourcepos"].as_str().unwrap()
+    )));
+    assert_eq!(changes[1]["old_text"], "gone para\nmore");
 }

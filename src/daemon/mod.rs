@@ -6,6 +6,7 @@
 //!   (Bearer token)
 //! - `GET /`, `GET /s/{id}`, `GET /assets/{*path}`, `GET /ws/{id}` (cookie; `/s/{id}?t=` sets it)
 
+mod doc;
 mod state;
 mod watch;
 mod ws;
