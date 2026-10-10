@@ -1,0 +1,56 @@
+<!doctype html>
+<!-- Template for examples/spike.rs; open the generated spike/out.html, not this file. -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>annotator selection spike</title>
+<style>
+  body { font-family: sans-serif; display: flex; gap: 2em; margin: 2em; }
+  #doc { flex: 2; } #panel { flex: 1; position: sticky; top: 1em; align-self: flex-start; }
+  mark { background: #ffe58a; } pre { background: #f4f4f4; padding: .5em; }
+  #out { white-space: pre-wrap; font-family: monospace; background: #eef; padding: .5em; }
+</style>
+</head>
+<body>
+<div id="doc"><!--RENDERED--></div>
+<div id="panel"><h3>Selection payload</h3><div id="out">select some text…</div></div>
+<script>
+const RAW = "__RAW__"; // raw markdown, for eyeballing only
+const doc = document.getElementById('doc');
+const out = document.getElementById('out');
+// Block-level elements carrying data-sourcepos. Inline ones (strong, em, code, a) also carry
+// it and the daemon accepts them, but blocks give stable offsets and CrossBlock detection.
+const BLOCKS = 'p,li,h1,h2,h3,h4,h5,h6,td,th,pre,blockquote,ul,ol,table,tr';
+
+function selectionPayload() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  let node = range.commonAncestorContainer;
+  if (node.nodeType !== Node.ELEMENT_NODE) node = node.parentElement;
+  const block = node && node.closest(BLOCKS.split(',').map(t => t + '[data-sourcepos]').join(','));
+  if (!block || !doc.contains(block)) return { error: 'cross-block or outside document' };
+  // UTF-16 offset of the selection start inside block.textContent: Range.toString() of
+  // [block start, selection start] has the same semantics as textContent (JS strings are UTF-16).
+  const pre = document.createRange();
+  pre.setStart(block, 0);
+  pre.setEnd(range.startContainer, range.startOffset);
+  return {
+    sourcepos: block.getAttribute('data-sourcepos'),
+    // Range.toString() (textContent semantics), not Selection.toString() (innerText-like in
+    // Chrome); the daemon matches whitespace-insensitively either way.
+    text: range.toString(),
+    offset: pre.toString().length,
+  };
+}
+
+document.addEventListener('mouseup', () => {
+  const p = selectionPayload();
+  if (!p) return;
+  const sel = { type: 'add_comment', selection: p, body: '...' };
+  out.textContent = JSON.stringify(sel, null, 2) +
+    '\n\nblock tag: ' + (p.sourcepos ? doc.querySelector(`[data-sourcepos="${p.sourcepos}"]`).tagName : '-');
+});
+</script>
+</body>
+</html>
