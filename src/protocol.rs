@@ -133,8 +133,12 @@ pub struct DocState {
     pub comments: Vec<CommentView>,
     /// UTF-16 ranges of marker/body text in `raw`, for hiding in CodeMirror.
     pub marker_ranges: Vec<(usize, usize)>,
-    /// Changes vs the last Done snapshot (empty in round 1). Filled in wave 2.
+    /// Changes vs the last Done snapshot (empty in round 1).
     pub changes: Vec<Change>,
+    /// `active` (reviewer's turn) or `closed` (sent back, waiting for the agent's next round).
+    pub round_state: String,
+    /// Reviewer name used for new comments/replies (config `author`, else $USER).
+    pub author: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -145,7 +149,13 @@ pub struct CommentView {
     pub author: Option<String>,
     pub created_at: Option<String>,
     pub orphaned: bool,
+    /// Anchored to lines of a fenced code block (`line:`), 0-based inclusive lines.
+    pub code_lines: Option<(usize, usize)>,
     pub entries: Vec<EntryView>,
+    /// Entries added since the last Done snapshot (round > 1), e.g. agent replies. 0 in round 1.
+    pub new_entries: usize,
+    /// Thread did not exist at the last Done snapshot.
+    pub new_thread: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -155,11 +165,18 @@ pub struct EntryView {
     pub text: String,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// A block-level change vs the last Done snapshot, computed on clean text (markers excluded).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Change {
+    /// `added`, `modified` or `removed`.
     pub kind: String,
-    /// `data-sourcepos` of the changed block in the current render, when known.
+    /// `data-sourcepos` of the changed top-level block in the current render (None for `removed`).
     pub sourcepos: Option<String>,
+    /// Previous text of the block (clean markdown) for `modified`/`removed`, for a hover diff.
+    pub old_text: Option<String>,
+    /// For `removed`: `data-sourcepos` of the block after which the removed text used to be
+    /// (None = start of document).
+    pub after: Option<String>,
 }
 
 // ---------- daemon status (additive) ----------
