@@ -47,6 +47,9 @@ install-app: app ## Install Annotator.app into $(APPDIR) and register it for Ope
 	rm -rf $(APPDIR)/Annotator.app
 	cp -R macos/build/Annotator.app $(APPDIR)/
 	$(LSREGISTER) -f $(APPDIR)/Annotator.app
+	@# Drop the build copy so Open With doesn't list Annotator twice.
+	-@$(LSREGISTER) -u macos/build/Annotator.app
+	rm -rf macos/build
 	@echo "installed $(APPDIR)/Annotator.app (it runs $(BINDIR)/annotator; keep that up to date with make install)"
 
 uninstall-app: ## Remove Annotator.app and unregister it
