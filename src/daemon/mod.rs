@@ -443,7 +443,8 @@ impl Sess {
     /// Long-poll until `round` ends.
     async fn wait(&self, app: &App, round: u32) -> Result<WaitResult, (StatusCode, String)> {
         let mut rx = self.result_tx.subscribe();
-        let _guard = state::WaiterGuard::new(self, app);
+        // Counted only once the poll actually blocks on an active round.
+        let mut guard = None;
         loop {
             {
                 let inner = self.inner.lock().unwrap();
@@ -461,6 +462,9 @@ impl Sess {
                         format!("round {round} result no longer available"),
                     ));
                 }
+            }
+            if guard.is_none() {
+                guard = Some(state::WaiterGuard::new(self, app));
             }
             if rx.changed().await.is_err() {
                 return Err(internal("session dropped"));

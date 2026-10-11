@@ -80,4 +80,53 @@ describe('App with mock daemon', () => {
     await vi.advanceTimersByTimeAsync(300);
     expect(document.querySelector<HTMLElement>('.notice')!.hidden).toBe(true);
   });
+
+  it('shows the no-agent-waiting hint and banner wording', async () => {
+    vi.resetModules();
+    const { App } = await import('../app');
+    const { mockFactory } = await import('../dev/mock');
+    const mock = (window as unknown as { __mock: { waiters: (n: number) => void } }).__mock;
+    new App(document.getElementById('app')!, 'ws://x/ws/dev', mockFactory);
+    await vi.advanceTimersByTimeAsync(500);
+    const hint = () => document.querySelector<HTMLElement>('.no-waiter')!;
+    expect(hint().hidden).toBe(true);
+
+    mock.waiters(0);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(hint().hidden).toBe(false);
+    expect(hint().textContent).toBe('No agent waiting: edits are saved, Done just closes the round');
+
+    // An agent starts waiting: the tab notices live.
+    mock.waiters(1);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(hint().hidden).toBe(true);
+
+    mock.waiters(0);
+    await vi.advanceTimersByTimeAsync(100);
+    let confirms = 0;
+    window.confirm = () => (confirms++, true);
+    (document.querySelector('.btn-primary') as HTMLButtonElement).click();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(confirms).toBe(0);
+    const banner = document.querySelector<HTMLElement>('.banner')!;
+    expect(banner.hidden).toBe(false);
+    expect(banner.textContent).toBe('✓Review closed. No agent was waiting; your edits and comments are saved in the file.');
+    expect(hint().hidden).toBe(true);
+    // No agent, so no next round.
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(document.querySelector('.round-badge')!.textContent).toBe('Round 1');
+  });
+
+  it('keeps the sent-back wording when an agent is waiting', async () => {
+    vi.resetModules();
+    const { App } = await import('../app');
+    const { mockFactory } = await import('../dev/mock');
+    new App(document.getElementById('app')!, 'ws://x/ws/dev', mockFactory);
+    await vi.advanceTimersByTimeAsync(500);
+    (document.querySelector('.btn-primary') as HTMLButtonElement).click();
+    await vi.advanceTimersByTimeAsync(300);
+    const t = document.querySelector('.banner')!.textContent!;
+    expect(t).toContain('Sent back to the agent.');
+    expect(t).not.toContain('No agent was waiting');
+  });
 });

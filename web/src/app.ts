@@ -20,6 +20,8 @@ export class App {
   private mode: Mode = localStorage.getItem(MODE_KEY) === 'source' ? 'source' : 'rendered';
   private closed = false;
   private closedRound = 0;
+  /** Whether nobody was waiting when Done was clicked here (null = unknown / not via this tab). */
+  private doneNoWaiter: boolean | null = null;
   private showChanges = localStorage.getItem(CHANGES_KEY) !== 'off';
   private changeEls: HTMLElement[] = [];
   private changeIdx = -1;
@@ -44,6 +46,12 @@ export class App {
   private modeBtns: Record<Mode, HTMLButtonElement>;
   private doneBtn = el('button', { className: 'btn btn-primary', type: 'button', text: 'Done', title: 'Send the review back to the agent' });
   private abandonBtn = el('button', { className: 'btn btn-ghost', type: 'button', text: 'Abandon' });
+  private noWaiterEl = el('span', {
+    className: 'no-waiter',
+    text: 'No agent waiting: edits are saved, Done just closes the round',
+    title: 'Opened without an agent waiting (e.g. from Finder). Your edits and comments are written to the file as you go.',
+    hidden: true,
+  });
   private banner = el('div', { className: 'banner', hidden: true });
   private notice = el('div', { className: 'notice', hidden: true });
   private pane = el('main', { className: 'doc-pane' });
@@ -84,6 +92,7 @@ export class App {
     const top = el('header', { className: 'topbar' }, [
       el('div', { className: 'title-group' }, [el('span', { className: 'logo', text: '✎' }), this.fileEl, this.roundEl, this.connEl]),
       el('span', { className: 'spacer' }),
+      this.noWaiterEl,
       this.changesPill,
       this.changesLegend,
       el('div', { className: 'seg' }, [this.modeBtns.rendered, this.modeBtns.source]),
@@ -161,6 +170,7 @@ export class App {
     if (m.type === 'doc') this.onDoc(docFromMsg(m));
     else if (m.type === 'error') this.toast(m.message + (m.reloaded ? ' (reloaded)' : ''), 'error');
     else if (m.type === 'round_closed') {
+      if (this.doneNoWaiter === null && this.doc && this.closedRound < m.round) this.doneNoWaiter = this.noWaiter(this.doc);
       this.closed = true;
       this.closedRound = Math.max(this.closedRound, m.round);
       this.applyReadOnly();
@@ -174,6 +184,7 @@ export class App {
     const wasClosed = this.closed;
     this.closed = doc.round_state === 'closed';
     if (!this.closed && newRound) this.closedRound = 0;
+    if (!this.closed) this.doneNoWaiter = null;
     if (newRound) this.changeIdx = -1;
 
     this.renderRendered(!prev || newRound);
@@ -380,11 +391,18 @@ export class App {
       this.floatBtn.hidden = true;
       this.sidebar.closeDraft();
       const next = Math.max(this.doc?.round ?? 0, this.closedRound) + 1;
-      this.banner.replaceChildren(
-        el('span', { className: 'banner-icon', text: '↩' }),
-        el('strong', { text: 'Sent back to the agent.' }),
-        el('span', { text: ` Waiting for round ${next}…` }),
-      );
+      if (this.doneNoWaiter)
+        this.banner.replaceChildren(
+          el('span', { className: 'banner-icon', text: '✓' }),
+          el('strong', { text: 'Review closed.' }),
+          el('span', { text: ' No agent was waiting; your edits and comments are saved in the file.' }),
+        );
+      else
+        this.banner.replaceChildren(
+          el('span', { className: 'banner-icon', text: '↩' }),
+          el('strong', { text: 'Sent back to the agent.' }),
+          el('span', { text: ` Waiting for round ${next}…` }),
+        );
     }
     this.banner.hidden = !ro;
     this.renderSidebar();
@@ -394,7 +412,14 @@ export class App {
   private done(): void {
     if (this.sidebar.hasUnsentText() && !window.confirm('You have an unsent comment. Send the review back anyway?')) return;
     this.flushSave();
+    // Decide the closed-banner wording now: the waiter count drops right after round_closed.
+    if (this.doc) this.doneNoWaiter = this.noWaiter(this.doc);
     this.send(msg.done());
+  }
+
+  /** Active round and no agent blocked on `annotator open` (older daemons: assume waiting). */
+  private noWaiter(doc: DocState): boolean {
+    return doc.round_state === 'active' && (doc.waiters ?? 1) === 0;
   }
 
   private stepChange(dir: number): void {
@@ -431,6 +456,9 @@ export class App {
     this.fileEl.title = d?.path ?? '';
     this.roundEl.textContent = d ? `Round ${d.round}` : '';
     this.roundEl.hidden = !d;
+    const nobody = !!d && !this.closed && this.noWaiter(d);
+    this.noWaiterEl.hidden = !nobody;
+    this.doneBtn.title = nobody ? 'Close this review round (no agent is waiting)' : 'Send the review back to the agent';
     document.title = `${this.unseenRound ? '● ' : ''}${name}${d ? ` · round ${d.round}` : ''}`;
 
     const n = d?.changes.length ?? 0;

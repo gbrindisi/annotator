@@ -23,6 +23,9 @@ enum Cmd {
         /// Do not launch a browser tab.
         #[arg(long)]
         no_browser: bool,
+        /// Register the round and open the tab, then exit 0 without waiting (no agent waiting).
+        #[arg(long)]
+        no_wait: bool,
     },
     /// Run the daemon (normally spawned automatically by `open`).
     Serve {
@@ -45,8 +48,9 @@ fn main() -> anyhow::Result<()> {
             file,
             json,
             no_browser,
+            no_wait,
         } => {
-            let code = annotator::client::open(&file, json, no_browser)?;
+            let code = annotator::client::open(&file, json, no_browser, no_wait)?;
             std::process::exit(code);
         }
         Cmd::Serve { foreground } => annotator::daemon::serve(foreground),

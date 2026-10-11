@@ -90,7 +90,7 @@ class FakeDaemon {
   constructor() {
     this.state = {
       path: '/home/bomber/project/fixtures/sample.md', round: 1, hash: hash(SAMPLE_RAW), raw: SAMPLE_RAW, html: SAMPLE_HTML,
-      comments: initialComments(), marker_ranges: fakeMarkerRanges(SAMPLE_RAW), changes: [], round_state: 'active', author: 'bomber',
+      comments: initialComments(), marker_ranges: fakeMarkerRanges(SAMPLE_RAW), changes: [], round_state: 'active', author: 'bomber', waiters: 1,
     };
   }
 
@@ -198,8 +198,11 @@ class FakeDaemon {
         if (s.round_state !== 'active') return;
         s.round_state = 'closed';
         this.push({ type: 'round_closed', round: s.round });
+        const waited = (s.waiters ?? 0) > 0;
+        s.waiters = 0; // the agent's wait returns
         this.pushDoc();
-        window.setTimeout(() => this.nextRound(), 4000);
+        // Only a waiting agent produces a next round.
+        if (waited) window.setTimeout(() => this.nextRound(), 4000);
         return;
       }
       case 'abandon': {
@@ -216,6 +219,7 @@ class FakeDaemon {
     const s = this.state;
     s.round += 1;
     s.round_state = 'active';
+    s.waiters = 1;
     const oldP = 'Here is a second paragraph with another highlighted span placed close to the first.';
     this.editHtml(root => {
       const p = root.querySelector('[data-sourcepos="7:1-7:83"]');
@@ -242,6 +246,12 @@ class FakeDaemon {
     }
     s.comments.push({ id: 'ag01', status: 'open', quote: 'Thursday as the release day', author: 'agent', created_at: now(), orphaned: false, code_lines: null, anchor: null, entries: [{ author: 'agent', timestamp: now(), text: 'Added this; please confirm.' }], new_entries: 1, new_thread: true });
     this.setRaw(s.raw.replace('Here is a second', 'Here is a **rewritten** second'));
+    this.pushDoc();
+  }
+
+  /** Set the number of agents waiting on this round (0 = opened with `--no-wait`). */
+  setWaiters(n: number): void {
+    this.state.waiters = n;
     this.pushDoc();
   }
 
@@ -294,7 +304,8 @@ FakeDaemon.prototype.up = true;
 
 const daemon = new FakeDaemon();
 
-/** Console helpers: __mock.drop(), __mock.down(ms), __mock.touch(), __mock.nextRound(). */
+/** Console helpers: __mock.drop(), __mock.down(ms), __mock.touch(), __mock.nextRound(),
+ *  __mock.waiters(n) / __mock.toggleWaiters() (no-agent-waiting state). */
 (window as unknown as { __mock: unknown }).__mock = {
   daemon,
   drop: () => [...daemon.sockets].forEach(s => s.close()),
@@ -305,6 +316,8 @@ const daemon = new FakeDaemon();
   },
   touch: () => daemon.touch(),
   nextRound: () => daemon.nextRound(),
+  waiters: (n = 0) => daemon.setWaiters(n),
+  toggleWaiters: () => daemon.setWaiters(daemon.state.waiters ? 0 : 1),
   error: (msg = 'Something went wrong') => daemon.error(msg),
 };
 console.info('[annotator] running against the in-browser mock daemon; see window.__mock');

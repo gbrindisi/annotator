@@ -131,12 +131,23 @@ async fn wait(d: &Daemon, id: &str, round: u32) -> Result<WaitResult, WaitErr> {
     r.json().await.map_err(|e| WaitErr::Transport(e.into()))
 }
 
-async fn open_async(file: &Path, json: bool, no_browser: bool) -> anyhow::Result<i32> {
+async fn open_async(
+    file: &Path,
+    json: bool,
+    no_browser: bool,
+    no_wait: bool,
+) -> anyhow::Result<i32> {
     let canonical = std::fs::canonicalize(file).with_context(|| format!("{}", file.display()))?;
     let path = canonical.to_string_lossy().into_owned();
     let mut d = ensure_daemon().await?;
     let resp = post_open(&d, &path, !no_browser).await?;
     eprintln!("annotator: review round {} at {}", resp.round, resp.url);
+    if no_wait {
+        if json {
+            println!("{}", serde_json::to_string_pretty(&resp)?);
+        }
+        return Ok(0);
+    }
     let round = resp.round;
     let mut retries = 0;
     let result = loop {
@@ -193,9 +204,9 @@ fn rt() -> anyhow::Result<tokio::runtime::Runtime> {
         .build()?)
 }
 
-/// Returns the process exit code: 0 Done, 2 Abandoned, 1 error.
-pub fn open(file: &Path, json: bool, no_browser: bool) -> anyhow::Result<i32> {
-    rt()?.block_on(open_async(file, json, no_browser))
+/// Returns the process exit code: 0 Done (or registered, with `no_wait`), 2 Abandoned, 1 error.
+pub fn open(file: &Path, json: bool, no_browser: bool, no_wait: bool) -> anyhow::Result<i32> {
+    rt()?.block_on(open_async(file, json, no_browser, no_wait))
 }
 
 pub fn status() -> anyhow::Result<()> {

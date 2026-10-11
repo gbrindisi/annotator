@@ -245,6 +245,7 @@ impl Sess {
             }
             .into(),
             author: crate::config::author(&self.home),
+            waiters: i.waiters,
             raw,
         })
     }
@@ -360,7 +361,7 @@ impl Sess {
     }
 }
 
-/// Counts a pending long-poll for status/idle purposes.
+/// Counts a pending long-poll (status, idle, `DocState.waiters`).
 pub struct WaiterGuard<'a> {
     sess: &'a Sess,
     app: &'a App,
@@ -368,7 +369,11 @@ pub struct WaiterGuard<'a> {
 
 impl<'a> WaiterGuard<'a> {
     pub fn new(sess: &'a Sess, app: &'a App) -> Self {
-        sess.inner.lock().unwrap().waiters += 1;
+        let mut i = sess.inner.lock().unwrap();
+        i.waiters += 1;
+        // Tabs show whether an agent is waiting: push a fresh Doc on every change.
+        sess.broadcast_doc_locked(&mut i);
+        drop(i);
         WaiterGuard { sess, app }
     }
 }
@@ -377,6 +382,8 @@ impl Drop for WaiterGuard<'_> {
     fn drop(&mut self) {
         let mut i = self.sess.inner.lock().unwrap();
         i.waiters = i.waiters.saturating_sub(1);
+        self.sess.broadcast_doc_locked(&mut i);
+        drop(i);
         self.app.touch();
     }
 }
