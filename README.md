@@ -36,6 +36,9 @@ annotator stop                  # stop the daemon
 annotator skill                 # print agent instructions (SKILL.md)
 ```
 
+Each file gets one browser tab: `open` brings it to the front (macOS, Chrome-family or Safari;
+the first time, macOS asks to let annotator control the browser) or opens it if it doesn't exist.
+
 The daemon (`annotator serve`) starts on demand and exits after 15 idle minutes. It listens on
 `127.0.0.1:7717` only (random port if busy), requires a per-run token, and only ever touches files
 registered through `annotator open`.

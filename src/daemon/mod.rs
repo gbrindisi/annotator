@@ -6,6 +6,7 @@
 //!   (Bearer token)
 //! - `GET /`, `GET /s/{id}`, `GET /assets/{*path}`, `GET /ws/{id}` (cookie; `/s/{id}?t=` sets it)
 
+mod browser;
 mod doc;
 mod state;
 mod watch;
@@ -314,8 +315,11 @@ async fn api_open(
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
-    if req.browser && sess.clients() == 0 {
-        launch_browser(&url);
+    if req.browser {
+        // Every open brings the file's tab to the front (or opens one): one tab per file.
+        let needle = format!(":{}/s/{}", app.port, sess.id);
+        let (url, connected) = (url.clone(), sess.clients() > 0);
+        tokio::task::spawn_blocking(move || browser::present(&url, &needle, connected));
     }
     Ok(Json(OpenResponse {
         session_id: sess.id.clone(),
@@ -328,29 +332,6 @@ async fn api_open(
 const RECONNECT_WINDOW: Duration = Duration::from_secs(10);
 /// How long `open` waits for such a tab before launching a new one (UI backoff caps at 2s).
 const RECONNECT_GRACE: Duration = Duration::from_millis(2500);
-
-fn launch_browser(url: &str) {
-    use std::process::{Command, Stdio};
-    let cmd = match std::env::var("ANNOTATOR_BROWSER") {
-        Ok(v) if v == "none" => return,
-        Ok(v) if !v.is_empty() => v,
-        _ if cfg!(target_os = "macos") => "open".into(),
-        _ => "xdg-open".into(),
-    };
-    let r = Command::new(&cmd)
-        .arg(url)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
-    match r {
-        // Reap in the background so no zombie lingers.
-        Ok(mut child) => {
-            std::thread::spawn(move || child.wait());
-        }
-        Err(e) => tracing::warn!("could not launch browser ({cmd}): {e}"),
-    }
-}
 
 #[derive(serde::Deserialize)]
 struct WaitQuery {

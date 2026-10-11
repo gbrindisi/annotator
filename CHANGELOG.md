@@ -7,6 +7,9 @@ versions follow [SemVer](https://semver.org). Add entries under `[Unreleased]` a
 ## [Unreleased]
 
 ### Added
+- One tab per file: every `annotator open` brings the file's existing browser tab to the front
+  (closing duplicates, reloading it if it lost its connection) and only opens a new tab if none
+  exists. macOS with Chrome-family browsers or Safari; elsewhere, a tab opens when none is connected.
 - `annotator open <file> --no-wait`: register/join the round and open the tab, then exit 0
   without waiting (for launchers such as Finder "Open With"); `--json` prints the open response.
 - macOS `Annotator.app` (`make install-app`): Finder "Open With > Annotator" for Markdown files,
