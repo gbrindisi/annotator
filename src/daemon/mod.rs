@@ -306,6 +306,14 @@ async fn api_open(
         "http://127.0.0.1:{}/s/{}?t={}",
         app.port, sess.id, app.token
     );
+    if req.browser && sess.clients() == 0 && round > 1 && app.started.elapsed() < RECONNECT_WINDOW {
+        // Freshly (re)started daemon, existing session: a tab from before the restart may still
+        // be in reconnect backoff. Give it a moment instead of opening a duplicate tab.
+        let deadline = Instant::now() + RECONNECT_GRACE;
+        while sess.clients() == 0 && Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
     if req.browser && sess.clients() == 0 {
         launch_browser(&url);
     }
@@ -315,6 +323,11 @@ async fn api_open(
         url,
     }))
 }
+
+/// How long after daemon start a missing tab may still be reconnecting.
+const RECONNECT_WINDOW: Duration = Duration::from_secs(10);
+/// How long `open` waits for such a tab before launching a new one (UI backoff caps at 2s).
+const RECONNECT_GRACE: Duration = Duration::from_millis(2500);
 
 fn launch_browser(url: &str) {
     use std::process::{Command, Stdio};

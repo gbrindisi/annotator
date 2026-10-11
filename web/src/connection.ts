@@ -15,7 +15,7 @@ export interface SocketLike {
 
 export type SocketFactory = (url: string) => SocketLike;
 
-export const backoffDelay = (attempt: number): number => Math.min(10_000, 500 * 2 ** Math.min(attempt, 5));
+export const backoffDelay = (attempt: number): number => Math.min(2_000, 500 * 2 ** Math.min(attempt, 5));
 
 /** WebSocket with reconnect + backoff. The daemon sends a fresh Doc on every connect. */
 export class Connection {

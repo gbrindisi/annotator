@@ -718,3 +718,34 @@ async fn round_two_changes_new_entries_and_summary() {
     )));
     assert_eq!(changes[1]["old_text"], "gone para\nmore");
 }
+
+#[tokio::test]
+async fn open_after_restart_waits_for_reconnecting_tab() {
+    let h = setup();
+    let file = h.file("t.md", "x\n");
+    let o = h.open(&file).await;
+    let mut ws = h.ws(&o.session_id).await;
+    ws.recv().await;
+    ws.send(json!({"type":"done"})).await;
+    h.wait(&o.session_id, 1).await;
+    drop(ws);
+
+    // Fresh daemon over the same home: no tab connected yet.
+    let h2 = H {
+        _home: tempfile::tempdir().unwrap(),
+        home: h.home.clone(),
+        router: annotator::daemon::test_router(h.home.clone(), PORT, TOKEN.into()).unwrap(),
+    };
+    let id = o.session_id.clone();
+    // A tab reconnects shortly after: open must notice it instead of launching a new tab.
+    let reconnect = async {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        h2.ws(&id).await
+    };
+    let t = std::time::Instant::now();
+    let (o2, _ws2) = tokio::join!(h2.open(&file), reconnect);
+    assert_eq!(o2.round, 2);
+    let waited = t.elapsed();
+    assert!(waited >= Duration::from_millis(300), "{waited:?}");
+    assert!(waited < Duration::from_millis(2000), "{waited:?}");
+}
