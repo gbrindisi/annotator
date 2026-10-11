@@ -1,4 +1,4 @@
-//! Port of `reference/markedit-comments/format/locate.ts`.
+//! Port of markedit-comments `src/format/locate.ts` (derived from kylemcd/obsidian-document-comments, MIT; see NOTICE).
 
 use regex::Regex;
 use std::ops::Range;

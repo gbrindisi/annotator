@@ -1,4 +1,4 @@
-//! Port of `reference/markedit-comments/format/escape.ts`.
+//! Port of markedit-comments `src/format/escape.ts` (derived from kylemcd/obsidian-document-comments, MIT; see NOTICE).
 //! Byte compatibility of the on-disk format depends on this file.
 
 /// Replace each `\X` (X not a line terminator) via `map`; `None` keeps the sequence verbatim.

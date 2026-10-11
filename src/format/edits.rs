@@ -1,4 +1,4 @@
-//! Port of `reference/markedit-comments/format/edits.ts`: pure string operations.
+//! Port of markedit-comments `src/format/edits.ts` (derived from kylemcd/obsidian-document-comments, MIT; see NOTICE): pure string operations.
 //!
 //! The `compute_*` functions return [`Change`]s in original coordinates (CodeMirror semantics);
 //! the convenience wrappers (`add_comment`, `append_reply`, ...) apply them and return the new

@@ -1,4 +1,4 @@
-//! Port of `reference/markedit-comments/format/serialize.ts`.
+//! Port of markedit-comments `src/format/serialize.ts` (derived from kylemcd/obsidian-document-comments, MIT; see NOTICE).
 
 use super::escape::{
     break_terminator, canonical_author_key, collapse_ws, encode_code_quote, escape_reaction_author,

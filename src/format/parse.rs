@@ -1,4 +1,4 @@
-//! Port of `reference/markedit-comments/format/parse.ts`.
+//! Port of markedit-comments `src/format/parse.ts` (derived from kylemcd/obsidian-document-comments, MIT; see NOTICE).
 
 use super::escape::{decode_code_quote, split_reaction_authors, unescape_text};
 use super::types::{CommentData, CommentStatus, ParsedComment, Reaction, ThreadEntry};

@@ -1,4 +1,4 @@
-//! Port of `reference/markedit-comments/format/types.ts`.
+//! Port of markedit-comments `src/format/types.ts` (derived from kylemcd/obsidian-document-comments, MIT; see NOTICE).
 
 use serde::{Deserialize, Serialize};
 use std::ops::Range;

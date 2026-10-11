@@ -1,5 +1,5 @@
 //! The comment format (byte-compatible with markedit-comments / Obsidian Document Comments).
-//! Port of `reference/markedit-comments/format/*`.
+//! Port of markedit-comments `src/format/*` (derived from kylemcd/obsidian-document-comments, MIT; see NOTICE).
 //! All offsets are byte offsets into the document `&str`.
 
 pub mod edits;

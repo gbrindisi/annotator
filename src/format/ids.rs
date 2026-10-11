@@ -1,4 +1,4 @@
-//! Port of `reference/markedit-comments/format/ids.ts`.
+//! Port of markedit-comments `src/format/ids.ts` (derived from kylemcd/obsidian-document-comments, MIT; see NOTICE).
 
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};

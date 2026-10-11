@@ -1,0 +1,15 @@
+annotator
+
+The on-disk comment format and the code under src/format/ (types, escaping, id generation,
+parsing, serialization and the pure edit operations) are a Rust port of markedit-comments
+(https://codebahn.net/g/markedit-comments, MIT, Copyright (c) 2026 Gianluca Brindisi), whose
+format code is itself ported from the Obsidian "Document Comments" plugin:
+
+  https://github.com/kylemcd/obsidian-document-comments
+  Copyright (c) 2026 Kyle McDonald
+  Licensed under the MIT License
+
+Parts of the web UI (web/src/ui/) are adapted from markedit-comments.
+
+The port keeps the format byte-compatible so files can be read and written by all of these
+tools and by agents using the plugin's published format reference.
