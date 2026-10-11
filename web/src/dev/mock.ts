@@ -227,9 +227,9 @@ class FakeDaemon {
       root.querySelector('[data-sourcepos="18:1-18:33"]')?.remove();
     });
     s.changes = [
-      { kind: 'modified', sourcepos: '7:1-7:83', old_text: oldP, after: null },
+      { kind: 'modified', sourcepos: '7:1-7:83', old_text: oldP, after: null, old_html: `<p data-sourcepos="1:1-1:${oldP.length}">${oldP}</p>\n` },
       { kind: 'added', sourcepos: '10:1-10:61', old_text: null, after: null },
-      { kind: 'removed', sourcepos: null, old_text: 'This body has no anchor any more.', after: '13:1-16:3' },
+      { kind: 'removed', sourcepos: null, old_text: 'This body has no anchor any more.', after: '13:1-16:3', old_html: '<p data-sourcepos="1:1-1:33">This body has <em data-sourcepos="1:15-1:18">no</em> anchor any more.</p>\n' },
     ];
     for (const c of s.comments) {
       c.new_entries = 0;

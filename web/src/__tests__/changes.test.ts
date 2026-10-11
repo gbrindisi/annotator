@@ -15,15 +15,13 @@ describe('applyChanges', () => {
       { kind: 'added', sourcepos: '3:1-3:9', old_text: null, after: null }, // no exact match
     ]);
     expect(els.map(e => e.getAttribute('data-change'))).toEqual(['removed', 'added', 'removed', 'modified']);
-    const p8 = root.querySelector('[data-sourcepos="8:1-8:5"]') as HTMLElement;
-    expect(p8.title).toContain('old two');
-    // Removed marker goes after the top-level block containing the `after` element.
-    expect(root.querySelector('ul')!.nextElementSibling!.className).toBe('removed-marker');
-    expect((root.querySelector('ul')!.nextElementSibling as HTMLElement).title).toContain('gone');
-    expect(root.firstElementChild!.className).toBe('removed-marker');
+    // Removed block goes after the top-level block containing the `after` element.
+    expect(root.querySelector('ul')!.nextElementSibling!.className).toBe('diff-del-block');
+    expect(root.querySelector('ul')!.nextElementSibling!.textContent).toBe('gone');
+    expect(root.firstElementChild!.className).toBe('diff-del-block');
 
     clearChanges(root);
-    expect(root.querySelectorAll('[data-change], .removed-marker').length).toBe(0);
-    expect(p8.hasAttribute('title')).toBe(false);
+    expect(root.querySelectorAll('[data-change], [data-diff]').length).toBe(0);
+    expect(root.innerHTML).toBe(html);
   });
 });

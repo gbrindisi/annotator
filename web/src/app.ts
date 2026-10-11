@@ -40,6 +40,7 @@ export class App {
   private changesPill = el('div', { className: 'changes-pill', hidden: true });
   private changesStep = el('button', { className: 'pill-main', type: 'button', title: 'Next change (n)' });
   private changesToggle = el('button', { className: 'pill-toggle', type: 'button' });
+  private changesLegend = el('span', { className: 'changes-legend', hidden: true });
   private modeBtns: Record<Mode, HTMLButtonElement>;
   private doneBtn = el('button', { className: 'btn btn-primary', type: 'button', text: 'Done', title: 'Send the review back to the agent' });
   private abandonBtn = el('button', { className: 'btn btn-ghost', type: 'button', text: 'Abandon' });
@@ -63,6 +64,11 @@ export class App {
     };
     this.modeBtns = { rendered: mk('rendered', 'Rendered'), source: mk('source', 'Source') };
     this.changesPill.append(this.changesStep, this.changesToggle);
+    this.changesLegend.append(
+      el('span', { className: 'legend-ins', text: 'added' }),
+      el('span', { className: 'legend-del', text: 'removed' }),
+      el('span', { className: 'legend-note', text: 'since your last review' }),
+    );
 
     this.sidebar = new Sidebar({
       reveal: id => this.reveal(id),
@@ -79,6 +85,7 @@ export class App {
       el('div', { className: 'title-group' }, [el('span', { className: 'logo', text: '✎' }), this.fileEl, this.roundEl, this.connEl]),
       el('span', { className: 'spacer' }),
       this.changesPill,
+      this.changesLegend,
       el('div', { className: 'seg' }, [this.modeBtns.rendered, this.modeBtns.source]),
       this.abandonBtn,
       this.doneBtn,
@@ -428,12 +435,13 @@ export class App {
 
     const n = d?.changes.length ?? 0;
     this.changesPill.hidden = n === 0;
+    this.changesLegend.hidden = n === 0 || !this.showChanges;
     this.changesStep.textContent = this.showChanges
       ? this.changeIdx >= 0 ? `${this.changeIdx + 1} / ${this.changeEls.length} changes` : `${n} change${n === 1 ? '' : 's'}`
       : `${n} change${n === 1 ? '' : 's'} hidden`;
     this.changesStep.disabled = !this.showChanges;
     this.changesToggle.textContent = this.showChanges ? 'Hide' : 'Show';
-    this.changesToggle.title = this.showChanges ? 'Hide change outlines' : 'Show change outlines';
+    this.changesToggle.title = this.showChanges ? 'Hide changes since your last review' : 'Show changes since your last review';
   }
 
   private onConnState(s: ConnState, retryIn?: number): void {
