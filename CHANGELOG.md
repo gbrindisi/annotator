@@ -6,6 +6,8 @@ versions follow [SemVer](https://semver.org). Add entries under `[Unreleased]` a
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-11
+
 ### Added
 - One tab per file: every `annotator open` brings the file's existing browser tab to the front
   (closing duplicates, reloading it if it lost its connection) and only opens a new tab if none
