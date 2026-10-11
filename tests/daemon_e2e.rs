@@ -270,7 +270,13 @@ async fn client_done_rounds_and_join() {
     let r2 = d.open(&file).await;
     assert_eq!(r2.round, 2);
     assert!(sdir.join("round-2.md").exists());
-    let doc = ws.recv().await;
+    // (A Doc for the waiter going away after Done may arrive first.)
+    let doc = loop {
+        let m = ws.recv().await;
+        if m["round"] != 1 {
+            break m;
+        }
+    };
     assert_eq!(
         (doc["type"].as_str(), doc["round"].as_u64()),
         (Some("doc"), Some(2))
@@ -288,6 +294,47 @@ async fn client_done_rounds_and_join() {
     .into_pair();
     assert!(matches!(a, WaitResult::Abandoned { round: 2 }));
     assert!(matches!(b, WaitResult::Abandoned { round: 2 }));
+}
+
+#[tokio::test]
+async fn open_no_wait_exits_and_leaves_round_active() {
+    if !loopback_ok() {
+        return;
+    }
+    let env = Env::new();
+    let file = env.file("nw.md", "# Hi\n");
+    let t = Instant::now();
+    let out = env
+        .cmd(&[
+            "open",
+            file.to_str().unwrap(),
+            "--no-browser",
+            "--no-wait",
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(t.elapsed() < Duration::from_secs(10));
+    let resp: OpenResponse = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(resp.round, 1);
+    let d = env.wait_daemon(None).await;
+    let st = d.status().await;
+    assert_eq!(st.sessions[0].state, "active");
+    assert_eq!(st.sessions[0].waiters, 0);
+    let mut ws = d.ws(&resp.session_id).await;
+    assert_eq!(ws.recv().await["waiters"], 0);
+
+    // An agent later opens the same file: joins round 1 and waits; the tab notices.
+    let client = spawn_open(&env, &file);
+    let doc = ws.recv().await;
+    assert_eq!(
+        (doc["round"].as_u64(), doc["waiters"].as_u64()),
+        (Some(1), Some(1))
+    );
+    ws.send(json!({"type":"done"})).await;
+    let (code, _) = wait_child(client).await;
+    assert_eq!(code, 0);
 }
 
 trait IntoPair<A, B> {

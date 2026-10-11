@@ -20,6 +20,8 @@ Run it in the background so you stay responsive, and disable the timeout: review
 
 The URL is printed on stderr in case the user needs it again.
 
+Do not pass `--no-wait`: it is for launchers with no agent waiting; you would never get the review back.
+
 ## While the review is open
 
 **Do not modify the file.** The user's browser autosaves to it. Work on something else or end

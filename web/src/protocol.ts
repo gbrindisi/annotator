@@ -65,6 +65,8 @@ export interface DocState {
   changes: Change[];
   round_state: 'active' | 'closed' | string;
   author: string;
+  /** Pending agent `wait` long-polls for this round; 0 = nobody waiting. Absent from older daemons. */
+  waiters?: number;
 }
 
 export type ServerMsg =

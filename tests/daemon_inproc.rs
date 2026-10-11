@@ -235,7 +235,14 @@ async fn rounds_done_join_and_waiters() {
     ));
     // Done twice is an error.
     ws.send(json!({"type":"done"})).await;
-    assert_eq!(ws.recv().await["type"], "error");
+    // Skip Docs pushed as the waiters went away.
+    let m = loop {
+        let m = ws.recv().await;
+        if m["type"] != "doc" {
+            break m;
+        }
+    };
+    assert_eq!(m["type"], "error");
 
     // Round 2 pushes a Doc to the connected tab.
     let r2 = h.open(&file).await;
@@ -748,4 +755,42 @@ async fn open_after_restart_waits_for_reconnecting_tab() {
     let waited = t.elapsed();
     assert!(waited >= Duration::from_millis(300), "{waited:?}");
     assert!(waited < Duration::from_millis(2000), "{waited:?}");
+}
+
+#[tokio::test]
+async fn waiters_in_doc_and_no_wait_then_join() {
+    let h = setup();
+    let file = h.file("w.md", "hi\n");
+    // Open without waiting (what `open --no-wait` does).
+    let o = h.open(&file).await;
+    let id = o.session_id.clone();
+    let mut ws = h.ws(&id).await;
+    let d = ws.doc().await;
+    assert_eq!(
+        (d["round_state"].as_str(), d["waiters"].as_u64()),
+        (Some("active"), Some(0))
+    );
+
+    // An agent opens the same file later: joins round 1 and waits; the tab gets a fresh Doc.
+    let j = h.open(&file).await;
+    assert_eq!((j.session_id.as_str(), j.round), (id.as_str(), 1));
+    let (r, _) = tokio::join!(h.wait(&id, 1), async {
+        let d = ws.doc().await;
+        assert_eq!(
+            (d["round"].as_u64(), d["waiters"].as_u64()),
+            (Some(1), Some(1))
+        );
+        ws.send(json!({"type":"done"})).await;
+        assert_eq!(ws.recv().await["type"], "round_closed");
+        let d = ws.doc().await;
+        assert_eq!(
+            (d["round_state"].as_str(), d["waiters"].as_u64()),
+            (Some("closed"), Some(0))
+        );
+    });
+    assert!(matches!(r, WaitResult::Done { round: 1, .. }));
+    // A late wait on a closed round returns immediately and does not push a Doc.
+    h.wait(&id, 1).await;
+    ws.no_msg(300).await;
+    assert_eq!(h.status().await.sessions[0].waiters, 0);
 }

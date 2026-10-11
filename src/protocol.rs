@@ -112,6 +112,7 @@ pub struct Selection {
 /// Messages from the daemon.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)] // Doc dominates traffic; boxing buys nothing here.
 pub enum ServerMsg {
     /// Full document state; sent on connect and after every change.
     Doc(DocState),
@@ -139,6 +140,10 @@ pub struct DocState {
     pub round_state: String,
     /// Reviewer name used for new comments/replies (config `author`, else $USER).
     pub author: String,
+    /// Pending `wait` long-polls (agents blocked on `annotator open`) for the current round.
+    /// 0 = nobody is waiting (e.g. `open --no-wait`). Additive; a fresh Doc is pushed on change.
+    #[serde(default)]
+    pub waiters: usize,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
