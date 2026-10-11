@@ -22,7 +22,7 @@ the file and agents can read them without any tooling.
 Requires Rust (stable) and Node 22+.
 
 ```bash
-make install      # builds the web UI, then cargo install --path .
+make install      # builds the web UI + release binary, installs to ~/bin (BINDIR=... to override)
 ```
 
 ## Use
@@ -80,6 +80,10 @@ source positions; rendered selection to source range), `src/daemon` (HTTP/WebSoc
 sessions, rounds, file watching), `src/client.rs` (the `open` CLI), `src/diff.rs` and
 `src/summary.rs` (round changes and Done summary), `web/` (TypeScript UI, embedded at build time).
 `spike/` documents the selection payload the UI sends.
+
+## Releasing
+
+See [RELEASING.md](RELEASING.md): `make release VERSION=X.Y.Z`, changelog in `CHANGELOG.md`.
 
 ## License
 
