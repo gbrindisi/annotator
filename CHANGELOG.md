@@ -6,6 +6,8 @@ versions follow [SemVer](https://semver.org). Add entries under `[Unreleased]` a
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-11
+
 ### Added
 - `annotator open <file>`: blocking review CLI (exit 0 on Done with a factual summary, 2 on
   Abandon, `--json`), plus `serve`, `status`, `stop`, `skill`.
