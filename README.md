@@ -48,6 +48,17 @@ In the browser:
   changes, new threads and replies are badged.
 - **Done** sends the review back; **Abandon** ends it without action.
 
+## macOS: Open With
+
+```bash
+make install-app   # builds Annotator.app into ~/Applications and registers it
+```
+
+Right-click a Markdown file in Finder, **Open With > Annotator**. The app is a tiny launcher that
+runs `~/bin/annotator open --no-wait <file>`: the review opens in your browser as usual, edits
+autosave, and since no agent is waiting, Done simply closes the round. It never becomes the default
+handler for `.md` files (rank `Alternate`). Launched on its own it shows a file picker.
+
 ## Agent setup
 
 Give your agent the skill: `annotator skill > ~/.pi/agent/skills/annotator/SKILL.md` (or the

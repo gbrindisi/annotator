@@ -38,5 +38,8 @@ If a step fails nothing is committed: fix, `git checkout -- .` to drop the parti
 
 ## Installing
 
+`make install-app` (macOS) rebuilds `~/Applications/Annotator.app` with the current version; the
+app itself always runs `~/bin/annotator`, so `make install` is what actually updates behaviour.
+
 `make install` builds and copies the binary to `~/bin` (override with `BINDIR=...`) and stops
 a running daemon so the next `annotator open` starts the new version.

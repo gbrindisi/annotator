@@ -4,3 +4,4 @@ web/dist/*
 !web/dist/.gitkeep
 spike/out.html
 .pi/
+macos/build/

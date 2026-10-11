@@ -1,9 +1,11 @@
-.PHONY: help build web test lint fmt dev install uninstall release clean
+.PHONY: help build web test lint fmt dev install uninstall app install-app uninstall-app release clean
 
 BINDIR ?= $(HOME)/bin
+APPDIR ?= $(HOME)/Applications
+LSREGISTER := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
 help: ## Show targets
-	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
 
 web: ## Build the frontend into web/dist (embedded by the binary)
 	cd web && npm ci && npm run build
@@ -36,6 +38,20 @@ install: build ## Install the binary into $(BINDIR) (default ~/bin) and restart 
 uninstall: ## Remove the binary from $(BINDIR)
 	-@$(BINDIR)/annotator stop >/dev/null 2>&1 || true
 	rm -f $(BINDIR)/annotator
+
+app: ## Build the macOS Open With launcher (macos/build/Annotator.app)
+	macos/build-app.sh
+
+install-app: app ## Install Annotator.app into $(APPDIR) and register it for Open With (macOS)
+	install -d $(APPDIR)
+	rm -rf $(APPDIR)/Annotator.app
+	cp -R macos/build/Annotator.app $(APPDIR)/
+	$(LSREGISTER) -f $(APPDIR)/Annotator.app
+	@echo "installed $(APPDIR)/Annotator.app (it runs $(BINDIR)/annotator; keep that up to date with make install)"
+
+uninstall-app: ## Remove Annotator.app and unregister it
+	-$(LSREGISTER) -u $(APPDIR)/Annotator.app
+	rm -rf $(APPDIR)/Annotator.app
 
 release: ## Cut a release: make release VERSION=X.Y.Z (see RELEASING.md)
 	@test -n "$(VERSION)" || { echo "usage: make release VERSION=X.Y.Z"; exit 1; }
