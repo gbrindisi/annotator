@@ -1,4 +1,5 @@
 import type { Selection } from './protocol';
+import { DELETED_SELECTOR, liveTextNodes } from './worddiff';
 
 /** Block-level elements carrying data-sourcepos (see spike/README.md). */
 export const BLOCK_TAGS = ['p', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'td', 'th', 'pre', 'blockquote', 'ul', 'ol', 'table', 'tr'];
@@ -11,19 +12,26 @@ export const selectionPayload = (range: Range | null, root: HTMLElement): Payloa
   if (!range || range.collapsed) return null;
   let node: Node | null = range.commonAncestorContainer;
   if (node.nodeType !== Node.ELEMENT_NODE) node = node.parentElement;
+  if ((node as Element | null)?.closest(DELETED_SELECTOR)) return null; // deleted diff text: not commentable
   const block = (node as Element | null)?.closest(BLOCK_SELECTOR) as HTMLElement | null;
   if (!block || !root.contains(block)) {
     if (!root.contains(range.commonAncestorContainer)) return null;
     return { ok: false, error: 'Select text within a single block to comment' };
   }
-  const pre = block.ownerDocument.createRange();
-  pre.setStart(block, 0);
-  pre.setEnd(range.startContainer, range.startOffset);
-  const text = range.toString();
+  // Walk live text nodes (deleted diff text excluded) instead of range.toString().
+  let offset = 0;
+  let text = '';
+  for (const t of liveTextNodes(block)) {
+    const len = t.data.length;
+    const from = t === range.startContainer ? range.startOffset : range.comparePoint(t, 0) < 0 ? len : 0;
+    const to = t === range.endContainer ? range.endOffset : range.comparePoint(t, len) > 0 ? 0 : len;
+    offset += from;
+    if (to > from) text += t.data.slice(from, to);
+  }
   if (!text.trim()) return null;
   return {
     ok: true,
-    selection: { sourcepos: block.getAttribute('data-sourcepos') ?? '', text, offset: pre.toString().length },
+    selection: { sourcepos: block.getAttribute('data-sourcepos') ?? '', text, offset },
   };
 };
 

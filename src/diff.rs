@@ -1,7 +1,7 @@
 //! Block-level changes between rounds, computed on clean text (comment markers excluded).
 
 use crate::protocol::Change;
-use crate::render::{line_starts, options, sourcepos_range, strip};
+use crate::render::{line_starts, options, render, sourcepos_range, strip};
 use comrak::{Arena, parse_document};
 use similar::{Algorithm, DiffOp, capture_diff_slices};
 
@@ -25,6 +25,11 @@ fn blocks(clean: &str) -> Vec<Block> {
             }
         })
         .collect()
+}
+
+/// Render an old block's clean text with the document pipeline.
+fn old_html(text: &str) -> String {
+    render(text).html
 }
 
 /// Changes from `old_raw` (last Done snapshot) to `new_raw` (current file).
@@ -69,6 +74,7 @@ pub fn changes_clean(old_clean: &str, new_clean: &str) -> Vec<Change> {
                 sourcepos: Some(new[ni + k].sourcepos.clone()),
                 old_text: Some(old[oi + k].text.clone()),
                 after: None,
+                old_html: Some(old_html(&old[oi + k].text)),
             });
         }
         for k in paired..nl {
@@ -77,6 +83,7 @@ pub fn changes_clean(old_clean: &str, new_clean: &str) -> Vec<Change> {
                 sourcepos: Some(new[ni + k].sourcepos.clone()),
                 old_text: None,
                 after: None,
+                old_html: None,
             });
         }
         for k in paired..ol {
@@ -85,6 +92,7 @@ pub fn changes_clean(old_clean: &str, new_clean: &str) -> Vec<Change> {
                 sourcepos: None,
                 old_text: Some(old[oi + k].text.clone()),
                 after: after(ni + paired),
+                old_html: Some(old_html(&old[oi + k].text)),
             });
         }
     }
@@ -116,6 +124,20 @@ mod tests {
         assert_eq!(ch[2].kind, "added");
         assert_eq!(ch[2].sourcepos.as_deref(), Some("7:1-7:8"));
         assert!(html.contains("data-sourcepos=\"7:1-7:8\""));
+    }
+
+    #[test]
+    fn old_html_for_modified_and_removed() {
+        let ch = changes("a **b** c\n\n- gone\n\nkeep\n", "a b c d\n\nkeep\n\nnew\n");
+        let m = ch.iter().find(|c| c.kind == "modified").unwrap();
+        assert!(m.old_html.as_deref().unwrap().contains(">b</strong>"));
+        let r = ch.iter().find(|c| c.kind == "removed").unwrap();
+        assert!(r.old_html.as_deref().unwrap().contains("<li"));
+        assert!(r.old_html.as_deref().unwrap().contains("gone"));
+        let a = ch.iter().find(|c| c.kind == "added").unwrap();
+        assert!(a.old_html.is_none());
+        let j = serde_json::to_string(m).unwrap();
+        assert!(j.contains("\"old_html\""));
     }
 
     #[test]

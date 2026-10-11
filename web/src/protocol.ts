@@ -50,6 +50,8 @@ export interface Change {
   sourcepos: string | null;
   old_text: string | null;
   after: string | null;
+  /** Old block rendered by the daemon (modified/removed); absent from older daemons. */
+  old_html?: string | null;
 }
 
 export interface DocState {

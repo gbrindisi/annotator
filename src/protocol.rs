@@ -179,6 +179,10 @@ pub struct Change {
     /// For `removed`: `data-sourcepos` of the block after which the removed text used to be
     /// (None = start of document).
     pub after: Option<String>,
+    /// Old block rendered to HTML (same pipeline as the doc) for `modified`/`removed`, so the UI
+    /// can show the removed content inline. Additive; absent from older daemons.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub old_html: Option<String>,
 }
 
 // ---------- daemon status (additive) ----------

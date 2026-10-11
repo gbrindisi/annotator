@@ -20,6 +20,11 @@
   --add-soft: rgba(26, 127, 55, 0.06);
   --mod: rgba(191, 135, 0, 0.6);
   --mod-soft: rgba(191, 135, 0, 0.06);
+  --ins-bg: rgba(26, 127, 55, 0.14);
+  --ins-line: rgba(26, 127, 55, 0.55);
+  --del-bg: rgba(209, 36, 47, 0.1);
+  --del-fg: #8c3a3f;
+  --del-line: rgba(209, 36, 47, 0.6);
   --input-bg: #ffffff;
   --btn-bg: #f0f1f3;
   --code-bg: #f4f5f7;
@@ -49,6 +54,11 @@
     --add-soft: rgba(63, 185, 80, 0.07);
     --mod: rgba(210, 153, 34, 0.7);
     --mod-soft: rgba(210, 153, 34, 0.07);
+    --ins-bg: rgba(63, 185, 80, 0.18);
+    --ins-line: rgba(63, 185, 80, 0.6);
+    --del-bg: rgba(255, 107, 107, 0.13);
+    --del-fg: #d9a3a6;
+    --del-line: rgba(255, 107, 107, 0.65);
     --input-bg: #141517;
     --btn-bg: #2a2d32;
     --code-bg: #1f2226;
@@ -159,16 +169,22 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .doc mark.is-flash, .is-flash { animation: flash 1.2s ease; }
 @keyframes flash { 0%, 40% { box-shadow: 0 0 0 4px var(--accent-strong); } 100% { box-shadow: 0 0 0 4px transparent; } }
 
-/* round changes */
-.doc [data-change='added'], .doc [data-change='modified'] { position: relative; border-radius: 4px; }
+/* round changes (track-changes view) */
+.changes-legend { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.changes-legend .legend-ins { background: var(--ins-bg); text-decoration: underline var(--ins-line); padding: 0 4px; border-radius: 3px; color: var(--fg-soft); }
+.changes-legend .legend-del { background: var(--del-bg); text-decoration: line-through var(--del-line); padding: 0 4px; border-radius: 3px; color: var(--del-fg); }
+.doc [data-change] { position: relative; }
 .doc [data-change]::before { content: ''; position: absolute; left: -16px; top: 0.2em; bottom: 0.2em; width: 3px; border-radius: 2px; }
-.doc [data-change='added'] { background: var(--add-soft); box-shadow: 0 0 0 6px var(--add-soft); }
-.doc [data-change='added']::before { background: var(--add); }
-.doc [data-change='modified'] { background: var(--mod-soft); box-shadow: 0 0 0 6px var(--mod-soft); cursor: help; }
-.doc [data-change='modified']::before { background: var(--mod); }
-.doc .removed-marker { height: 0; border-top: 2px dashed var(--danger); margin: -0.4em 0 0.9em; position: relative; cursor: help; opacity: 0.7; }
-.doc .removed-marker::after { content: 'removed'; position: absolute; right: 0; top: -0.9em; font: 10px/1 var(--sans); text-transform: uppercase; letter-spacing: 0.05em; color: var(--danger); background: var(--bg); padding: 2px 4px; }
-.doc .removed-marker:hover { opacity: 1; }
+.doc [data-change='added'] { background: var(--add-soft); box-shadow: 0 0 0 6px var(--add-soft); border-radius: 4px; }
+.doc [data-change='added']::before, .doc [data-change='modified']::before, .doc [data-change='replaced']::before { background: var(--add); }
+.doc [data-change='removed']::before { background: var(--del-line); }
+.doc ins.diff-ins { background: var(--ins-bg); text-decoration: underline 1px var(--ins-line); text-underline-offset: 2px; border-radius: 2px; }
+.doc del.diff-del { background: var(--del-bg); color: var(--del-fg); text-decoration: line-through 1px var(--del-line); border-radius: 2px; }
+.doc [data-diff='del'], .doc [data-diff='del-block'] { user-select: none; -webkit-user-select: none; }
+.doc .diff-del-block { background: var(--del-bg); color: var(--del-fg); text-decoration: line-through 1px var(--del-line); border-radius: 4px; padding: 2px 8px; margin: 0 -8px 0.9em; }
+.doc .diff-del-block > :first-child { margin-top: 0; }
+.doc .diff-del-block > :last-child { margin-bottom: 0; }
+.doc .diff-del-block * { color: inherit; text-decoration: inherit; }
 
 /* ---------- floating comment button, toasts, flash ---------- */
 .float-comment { position: fixed; z-index: 50; font: 600 12px var(--sans); padding: 5px 12px; border-radius: 999px; border: 0; cursor: pointer; background: var(--fg); color: var(--bg); box-shadow: var(--shadow); }
