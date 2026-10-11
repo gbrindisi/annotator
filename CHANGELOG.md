@@ -9,6 +9,8 @@ versions follow [SemVer](https://semver.org). Add entries under `[Unreleased]` a
 ### Added
 - `annotator open <file> --no-wait`: register/join the round and open the tab, then exit 0
   without waiting (for launchers such as Finder "Open With"); `--json` prints the open response.
+- macOS `Annotator.app` (`make install-app`): Finder "Open With > Annotator" for Markdown files,
+  never the default handler; runs `annotator open --no-wait`.
 - `DocState.waiters` (protocol, additive): pending agent waits for the round, pushed live.
 - UI: "No agent waiting" hint in the top bar, and a "Review closed" banner after Done when no
   agent was waiting. Dev mock: `__mock.waiters(n)` / `__mock.toggleWaiters()`.
