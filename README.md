@@ -46,6 +46,8 @@ registered through `annotator open`.
 In the browser:
 - **Rendered** view: select text, click **Comment** (or Ctrl/Cmd-Alt-M). Click a highlight to focus
   its thread; click a thread's quote to jump to the text.
+- ` ```mermaid ` fences render as diagrams in a high-contrast theme (light and dark): click to zoom,
+  hover for **Comment** (whole diagram) / **Source** (select lines to comment on them).
 - **Source** view: CodeMirror with comment markers hidden; edits autosave.
 - Sidebar: reply, edit, delete, resolve/reopen, delete thread; filter open/all.
 - Round 2+: changed blocks are outlined (hover for the old text), `n` / `Shift-n` step through

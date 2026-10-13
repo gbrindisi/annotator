@@ -2,13 +2,14 @@
 
 use crate::format::{CommentStatus, ParsedComment, parse_comments};
 use crate::protocol::{CommentView, EntryView};
+use crate::render::Rendered;
 use crate::utf16::Utf16Index;
 use std::collections::HashMap;
 use std::ops::Range;
 
 /// Comment views for `raw`. `previous` = last Done snapshot (round > 1) for new-thread/new-entry
-/// flags.
-pub fn comment_views(raw: &str, previous: Option<&str>) -> Vec<CommentView> {
+/// flags. `rendered` = `render(raw)`, used to find the code block of code-line comments.
+pub fn comment_views(raw: &str, previous: Option<&str>, rendered: &Rendered) -> Vec<CommentView> {
     let prev: Option<HashMap<String, usize>> = previous.map(|p| {
         parse_comments(p)
             .into_iter()
@@ -18,11 +19,16 @@ pub fn comment_views(raw: &str, previous: Option<&str>) -> Vec<CommentView> {
     let idx = Utf16Index::new(raw);
     parse_comments(raw)
         .into_iter()
-        .map(|c| view(c, prev.as_ref(), &idx))
+        .map(|c| view(c, prev.as_ref(), &idx, rendered))
         .collect()
 }
 
-fn view(c: ParsedComment, prev: Option<&HashMap<String, usize>>, idx: &Utf16Index) -> CommentView {
+fn view(
+    c: ParsedComment,
+    prev: Option<&HashMap<String, usize>>,
+    idx: &Utf16Index,
+    rendered: &Rendered,
+) -> CommentView {
     let orphaned = c.is_orphan();
     let anchor = c
         .anchor_range()
@@ -35,6 +41,12 @@ fn view(c: ParsedComment, prev: Option<&HashMap<String, usize>>, idx: &Utf16Inde
             Some(&old) => (false, n.saturating_sub(old)),
         },
     };
+    let block_sourcepos = c
+        .data
+        .code_lines
+        .as_ref()
+        .and_then(|_| rendered.code_block_of(&c.id))
+        .map(str::to_string);
     let d = c.data;
     CommentView {
         id: c.id,
@@ -49,6 +61,7 @@ fn view(c: ParsedComment, prev: Option<&HashMap<String, usize>>, idx: &Utf16Inde
         orphaned,
         code_lines: d.code_lines.map(|r| (r.start, r.end)),
         anchor,
+        block_sourcepos,
         entries: d
             .thread
             .into_iter()
@@ -145,7 +158,7 @@ mod tests {
     fn views_and_round_deltas() {
         let prev = "<!--c:a1-->x<!--/c:a1-->\n<!--co:a1 by:me status:open\nme: hi\n-->\n";
         let raw = "<!--c:a1-->x<!--/c:a1-->\n<!--co:a1 by:me status:resolved quote:\"x\"\nme: hi\nagent: done\n-->\n\nfoo\n<!--co:b2 by:agent status:open\nagent: orphan\n-->\n";
-        let v = comment_views(raw, Some(prev));
+        let v = comment_views(raw, Some(prev), &crate::render::render(raw));
         assert_eq!(v.len(), 2);
         assert_eq!(
             (
@@ -159,7 +172,50 @@ mod tests {
         );
         assert_eq!(v[0].entries[1].author, "agent");
         assert!(v[1].orphaned && v[1].new_thread && v[1].new_entries == 1);
-        let v = comment_views(raw, None);
+        let v = comment_views(raw, None, &crate::render::render(raw));
         assert!(!v[1].new_thread && v[1].new_entries == 0);
+    }
+
+    fn pre_sourcepos(html: &str) -> Vec<String> {
+        html.split("<pre data-sourcepos=\"")
+            .skip(1)
+            .map(|r| r[..r.find('"').unwrap()].to_string())
+            .collect()
+    }
+
+    #[test]
+    fn code_comments_know_their_block() {
+        let raw = "Intro <!--c:t1-->text<!--/c:t1-->\n<!--co:t1 status:open\nme: a\n-->\n\n```rust\nfn a() {}\n```\n\n<!--c:m1-->\n```mermaid\nflowchart LR\n  A --> B\n```\n<!--/c:m1-->\n<!--co:m1 by:me status:open line:0\nme: whole diagram\n-->\n\n- item\n\n  ```mermaid\n  graph TD\n  ```\n";
+        let r = crate::render::render(raw);
+        let pres = pre_sourcepos(&r.html);
+        assert_eq!(pres.len(), 3, "{}", r.html);
+        let v = comment_views(raw, None, &r);
+        let by = |id: &str| v.iter().find(|c| c.id == id).unwrap();
+        // Inline comment: no block. Code comment: the second <pre>, exactly as in the html.
+        assert_eq!(by("t1").block_sourcepos, None);
+        assert_eq!(by("m1").code_lines, Some((0, 0)));
+        assert_eq!(by("m1").block_sourcepos.as_deref(), Some(pres[1].as_str()));
+        // Round trip through the wire format.
+        let json = serde_json::to_value(by("m1")).unwrap();
+        assert_eq!(json["block_sourcepos"], pres[1].as_str());
+        assert!(serde_json::to_value(by("t1")).unwrap()["block_sourcepos"].is_null());
+    }
+
+    #[test]
+    fn code_comment_in_nested_block_and_without_wrapper() {
+        // Comment on a code block inside a list item; the markers sit on their own lines.
+        let raw = "- item\n\n  <!--c:n1-->\n  ```mermaid\n  graph TD\n  ```\n  <!--/c:n1-->\n  <!--co:n1 status:open line:0\n  me: x\n  -->\n\nafter\n";
+        let r = crate::render::render(raw);
+        let pres = pre_sourcepos(&r.html);
+        assert_eq!(pres.len(), 1, "{}", r.html);
+        let v = comment_views(raw, None, &r);
+        assert_eq!(v[0].block_sourcepos.as_deref(), Some(pres[0].as_str()));
+        // A line comment without an anchor (no markers) has no block.
+        let orphan = "```\nx\n```\n<!--co:o1 status:open line:0\nme: x\n-->\n";
+        let v = comment_views(orphan, None, &crate::render::render(orphan));
+        assert_eq!(
+            (v[0].code_lines, v[0].block_sourcepos.clone()),
+            (Some((0, 0)), None)
+        );
     }
 }

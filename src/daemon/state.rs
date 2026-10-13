@@ -227,12 +227,13 @@ impl Sess {
                     .ok()
             })
             .flatten();
+        let rendered = crate::render::render(&raw);
         Ok(DocState {
             path: i.meta.path.clone(),
             round,
             hash: session::sha256_hex(raw.as_bytes()),
-            html: crate::render::render(&raw).html,
-            comments: super::doc::comment_views(&raw, previous.as_deref()),
+            comments: super::doc::comment_views(&raw, previous.as_deref(), &rendered),
+            html: rendered.html,
             marker_ranges: super::doc::marker_ranges(&raw),
             changes: previous
                 .as_deref()

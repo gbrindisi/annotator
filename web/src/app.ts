@@ -1,7 +1,8 @@
 import { applyChanges, clearChanges } from './changes';
 import { Connection, type ConnState, type SocketFactory } from './connection';
 import { cidAt, markOrder, marksFor, styleMarks } from './marks';
-import { docFromMsg, msg, type ClientMsg, type DocState, type ServerMsg } from './protocol';
+import { MermaidView, type Loader } from './mermaid';
+import { docFromMsg, msg, type ClientMsg, type DocState, type Selection, type ServerMsg } from './protocol';
 import { currentRange, selectionPayload } from './selection';
 import { SourceEditor } from './source';
 import { el } from './ui/dom';
@@ -62,9 +63,14 @@ export class App {
   private flashEl = el('div', { className: 'round-flash', hidden: true });
   private sidebar: Sidebar;
   private editor: SourceEditor;
+  private mermaid: MermaidView;
 
-  constructor(mount: HTMLElement, url: string, factory?: SocketFactory) {
+  constructor(mount: HTMLElement, url: string, factory?: SocketFactory, opts: { mermaidLoader?: Loader } = {}) {
     this.root = mount;
+    this.mermaid = new MermaidView(
+      { comment: sel => this.commentOnBlock(sel), focusThread: id => this.setActive(id, true) },
+      opts.mermaidLoader,
+    );
     const mk = (m: Mode, label: string) => {
       const b = el('button', { className: 'seg-btn', type: 'button', text: label });
       b.addEventListener('click', () => this.setMode(m));
@@ -200,6 +206,7 @@ export class App {
     const top = this.pane.scrollTop;
     // Daemon-generated, sanitized HTML (comrak safe mode); inserted, never evaluated.
     this.rendered.innerHTML = this.doc.html;
+    this.mermaid.attach(this.rendered); // async: never blocks the rest of the render
     this.decorateRendered();
     if (this.mode === 'rendered') this.pane.scrollTop = resetScroll ? 0 : top;
   }
@@ -208,6 +215,8 @@ export class App {
     if (!this.doc) return;
     styleMarks(this.rendered, this.doc.comments, this.sidebarActive);
     this.changeEls = this.showChanges ? applyChanges(this.rendered, this.doc.changes) : (clearChanges(this.rendered), []);
+    this.mermaid.decorateChanges(this.rendered);
+    this.mermaid.decorateComments(this.rendered, this.doc.comments);
     if (this.changeIdx >= this.changeEls.length) this.changeIdx = -1;
   }
 
@@ -334,6 +343,16 @@ export class App {
     this.floatBtn.hidden = true;
   }
 
+  /** "Comment" on a rendered diagram: the selection payload covers the whole code block. */
+  private commentOnBlock(selection: Selection): void {
+    if (this.closed || !this.doc) return;
+    if (!selection.text.trim()) {
+      this.toast('This diagram has no source to comment on', 'error');
+      return;
+    }
+    this.sidebar.openDraft({ quote: selection.text, submit: body => this.send(msg.addComment(selection, body)) });
+  }
+
   private sidebarActive: string | null = null;
 
   private setActive(id: string | null, scrollCard: boolean): void {
@@ -350,14 +369,27 @@ export class App {
       return;
     }
     const marks = marksFor(this.rendered, id);
-    if (!marks.length) return;
+    if (!marks.length) {
+      // Code-line comment: scroll to its diagram / code block.
+      const sp = this.doc?.comments.find(c => c.id === id)?.block_sourcepos;
+      const block = sp ? this.mermaid.revealTarget(this.rendered, sp) : null;
+      if (block) {
+        block.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        flash(block);
+      }
+      return;
+    }
     marks[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
     for (const m of marks) flash(m);
   }
 
   private renderSidebar(): void {
     if (!this.doc) return;
-    this.sidebar.render(this.doc.comments, markOrder(this.rendered), this.closed);
+    // Code-line comments can jump to their code block / diagram when it is in the rendered doc.
+    const jumpable = new Set(
+      this.doc.comments.filter(c => c.code_lines && c.block_sourcepos && this.mermaid.revealTarget(this.rendered, c.block_sourcepos)).map(c => c.id),
+    );
+    this.sidebar.render(this.doc.comments, markOrder(this.rendered), this.closed, jumpable);
   }
 
   // ---------- modes / state ----------

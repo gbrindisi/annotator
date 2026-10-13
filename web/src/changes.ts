@@ -1,4 +1,5 @@
 import type { Change } from './protocol';
+import { CHANGE_UI_ATTR, mermaidSourceIn, OLD_CODE_ATTR, SHOW_PREV_CLASS } from './mermaid';
 import { applyWordDiff, changedRatio, clearWordDiff, DIFF_ATTR, liveTextNodes, wordDiff } from './worddiff';
 
 export const CHANGE_ATTR = 'data-change';
@@ -47,11 +48,24 @@ export const applyChanges = (root: HTMLElement, changes: Change[]): HTMLElement[
   const out: HTMLElement[] = [];
   for (const ch of changes) {
     if (ch.kind === 'added' || ch.kind === 'modified') {
-      const el = ch.sourcepos ? bySourcepos(root, ch.sourcepos) : null;
-      if (!el) continue;
+      const found = ch.sourcepos ? bySourcepos(root, ch.sourcepos) : null;
+      if (!found) continue;
+      // A rendered Mermaid block: the diagram container carries the marker; the hidden <pre>
+      // is never word-diffed.
+      const diagram = ch.sourcepos ? mermaidContainer(root, ch.sourcepos) : null;
+      const el = diagram ?? found;
       el.setAttribute(CHANGE_ATTR, ch.kind);
       out.push(el);
       if (ch.kind !== 'modified' || ch.old_html == null) continue;
+      if (diagram) {
+        const old = mermaidSourceIn(ch.old_html);
+        if (old !== null) diagram.setAttribute(OLD_CODE_ATTR, old); // "Previous version" toggle
+        else {
+          diagram.before(delBlock(doc, ch.old_html, ch.old_text));
+          diagram.setAttribute(CHANGE_ATTR, 'replaced');
+        }
+        continue;
+      }
       const cur = liveTextNodes(el).map(t => t.data).join('');
       const ops = wordDiff(oldTextContent(doc, ch.old_html), cur);
       if (changedRatio(ops) > BLOCK_DIFF_THRESHOLD || !applyWordDiff(el, ops)) {
@@ -71,6 +85,8 @@ export const applyChanges = (root: HTMLElement, changes: Change[]): HTMLElement[
         if (!top) continue;
         // Keep several removed blocks after one anchor in their original order.
         let ref: Element = top;
+        // A hidden mermaid <pre> is followed by its diagram container: go after that.
+        if (ref.nextElementSibling?.getAttribute('data-mermaid-for') === ch.after) ref = ref.nextElementSibling;
         while (ref.nextElementSibling?.getAttribute(DIFF_ATTR) === 'del-block' && ref.nextElementSibling.getAttribute(CHANGE_ATTR) === 'removed') ref = ref.nextElementSibling;
         ref.after(block);
       } else if (ch.after == null) {
@@ -86,8 +102,16 @@ export const applyChanges = (root: HTMLElement, changes: Change[]): HTMLElement[
   return sortByDocument(out);
 };
 
+/** The diagram container of the mermaid code block with this sourcepos, if rendered as one. */
+const mermaidContainer = (root: ParentNode, sp: string): HTMLElement | null =>
+  root.querySelector<HTMLElement>(`.mermaid-block[data-mermaid-for="${CSS.escape(sp)}"]`);
+
 export const clearChanges = (root: HTMLElement): void => {
   clearWordDiff(root);
+  // Mermaid: the "Previous version" UI and the state it left on diagram containers.
+  root.querySelectorAll(`[${CHANGE_UI_ATTR}]`).forEach(n => n.remove());
+  root.querySelectorAll<HTMLElement>(`.${SHOW_PREV_CLASS}`).forEach(n => n.classList.remove(SHOW_PREV_CLASS));
+  root.querySelectorAll(`[${OLD_CODE_ATTR}]`).forEach(n => n.removeAttribute(OLD_CODE_ATTR));
   root.querySelectorAll<HTMLElement>(`[${CHANGE_ATTR}]`).forEach(n => n.removeAttribute(CHANGE_ATTR));
 };
 

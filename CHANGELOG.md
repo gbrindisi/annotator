@@ -6,6 +6,21 @@ versions follow [SemVer](https://semver.org). Add entries under `[Unreleased]` a
 
 ## [Unreleased]
 
+### Added
+- Mermaid diagrams: ` ```mermaid ` fences render as SVG in the rendered view (mermaid v11,
+  lazy-loaded only when a document has a diagram, `securityLevel: strict`) with a custom
+  high-contrast theme for light and dark mode. Invalid diagrams show an error box above the code.
+  Click a diagram to zoom (fit to screen, wheel/pinch zoom, drag to pan, Esc closes).
+- Comments on diagrams: hover toolbar with **Comment** (anchors a line comment on the whole code
+  block) and **Source** (show the code block instead, to comment on specific lines). Diagrams with
+  comments get a highlight frame and a count badge that focuses the thread; a code comment's
+  "jump to" scrolls to its diagram / code block.
+- Round changes on diagrams: added/modified diagrams get the change bar, modified ones a
+  "Previous version" toggle, removed ones show the old diagram in the removed-block box.
+- `CommentView.block_sourcepos` (protocol, additive): the `data-sourcepos` of the `<pre>` a
+  code-line comment belongs to, exactly as in `DocState.html`.
+- `fixtures/mermaid.md`: sample document with every supported diagram kind plus an invalid one.
+
 ## [0.2.0] - 2026-10-11
 
 ### Added

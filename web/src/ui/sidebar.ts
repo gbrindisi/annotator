@@ -22,7 +22,7 @@ export class Sidebar {
   private draft: Composer | null = null;
   private activeId: string | null = null;
   filter: Filter;
-  private last: { comments: CommentView[]; order: string[]; readOnly: boolean } = { comments: [], order: [], readOnly: false };
+  private last: { comments: CommentView[]; order: string[]; readOnly: boolean; jumpable: Set<string> } = { comments: [], order: [], readOnly: false, jumpable: new Set() };
 
   constructor(private cb: CardCallbacks) {
     this.filter = (localStorage.getItem(FILTER_KEY) as Filter) === 'all' ? 'all' : 'open';
@@ -77,16 +77,16 @@ export class Sidebar {
     this.filter = f;
     localStorage.setItem(FILTER_KEY, f);
     this.syncFilterButtons();
-    this.render(this.last.comments, this.last.order, this.last.readOnly);
+    this.render(this.last.comments, this.last.order, this.last.readOnly, this.last.jumpable);
   }
 
   private syncFilterButtons(): void {
     for (const [f, b] of Object.entries(this.filterBtns)) b.classList.toggle('is-on', f === this.filter);
   }
 
-  /** `order` = mark order in the rendered doc (ids anchored there). */
-  render(comments: CommentView[], order: string[], readOnly: boolean): void {
-    this.last = { comments, order, readOnly };
+  /** `order` = mark order in the rendered doc (ids anchored there); `jumpable` = code comments whose block is in the doc. */
+  render(comments: CommentView[], order: string[], readOnly: boolean, jumpable: Set<string> = new Set()): void {
+    this.last = { comments, order, readOnly, jumpable };
     const anchored = new Set(order);
     const open = comments.filter(c => c.status !== 'resolved').length;
     this.count.textContent = String(open);
@@ -99,7 +99,7 @@ export class Sidebar {
     }
     const nodes: HTMLElement[] = [];
     for (const c of visible) {
-      const props = { comment: c, readOnly, anchored: anchored.has(c.id) };
+      const props = { comment: c, readOnly, anchored: anchored.has(c.id) || jumpable.has(c.id) };
       let card = this.cards.get(c.id);
       if (card) card.update(props);
       else {
@@ -127,7 +127,7 @@ export class Sidebar {
     let card = this.cards.get(id);
     if (!card?.el.isConnected) {
       // A resolved thread hidden by the filter: show it while active.
-      this.render(this.last.comments, this.last.order, this.last.readOnly);
+      this.render(this.last.comments, this.last.order, this.last.readOnly, this.last.jumpable);
       card = this.cards.get(id);
     }
     if (scroll && card) card.el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });

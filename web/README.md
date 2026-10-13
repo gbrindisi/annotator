@@ -20,4 +20,4 @@ answers with round 2 (changes, a reply, a new thread) after ~4s.
 
 Layout: `src/app.ts` (shell, state, WS handling), `src/ui/*` (sidebar, cards, composer, adapted
 from the MarkEdit plugin), `src/selection.ts` (spike selection algorithm), `src/marks.ts`,
-`src/changes.ts`, `src/decorations.ts` + `src/source.ts` (CodeMirror), `src/connection.ts`.
+`src/changes.ts`, `src/mermaid.ts` + `src/mermaidTheme.ts` + `src/zoom.ts` (diagrams, lazy), `src/decorations.ts` + `src/source.ts` (CodeMirror), `src/connection.ts`.

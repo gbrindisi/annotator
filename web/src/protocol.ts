@@ -38,6 +38,8 @@ export interface CommentView {
   code_lines: [number, number] | null;
   /** UTF-16 range of the anchored text in `raw`, when anchored. */
   anchor: [number, number] | null;
+  /** Code-line comments: `data-sourcepos` of the `<pre>` (in `DocState.html`) of the code block. */
+  block_sourcepos?: string | null;
   entries: EntryView[];
   new_entries: number;
   new_thread: boolean;

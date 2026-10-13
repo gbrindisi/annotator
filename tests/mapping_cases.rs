@@ -453,3 +453,72 @@ fn sample_fixture_selection() {
     let html = render(&wrap(raw, got, "new1")).html;
     assert_eq!(marked_text(&html, "new1"), "QA timeline");
 }
+
+/// The UI's "Comment" button on a rendered Mermaid diagram sends the whole code block:
+/// sourcepos of the `<pre>`, its full textContent and offset 0. That must become a line
+/// comment covering every line of the block.
+#[test]
+fn whole_code_block_selection_covers_all_lines() {
+    let raw =
+        "Plan:\n\n```mermaid\nflowchart LR\n  A[Start] --> B{Ok?}\n\n  B -->|yes| C\n```\n\nEnd.\n";
+    let r = render(raw);
+    let sp = "3:1-8:3";
+    assert!(
+        r.html.contains(&format!("<pre data-sourcepos=\"{sp}\">")),
+        "{}",
+        r.html
+    );
+    // textContent of <pre><code>: the literal, including the trailing newline.
+    let text = "flowchart LR\n  A[Start] --> B{Ok?}\n\n  B -->|yes| C\n";
+    let sel = Selection {
+        sourcepos: sp.into(),
+        text: text.into(),
+        offset: 0,
+    };
+    match map_selection(raw, &sel) {
+        Err(MappingError::InCodeBlock {
+            block,
+            from_line,
+            to_line,
+        }) => {
+            assert_eq!((from_line, to_line), (0, 3));
+            assert!(raw[block.clone()].starts_with("```mermaid") && raw[block].ends_with("```"));
+        }
+        other => panic!("{other:?}"),
+    }
+    // A single-line diagram and an indented block inside a list item behave the same.
+    let one = "```mermaid\ngraph TD\n```\n";
+    let sel = Selection {
+        sourcepos: "1:1-3:3".into(),
+        text: "graph TD\n".into(),
+        offset: 0,
+    };
+    assert!(matches!(
+        map_selection(one, &sel),
+        Err(MappingError::InCodeBlock {
+            from_line: 0,
+            to_line: 0,
+            ..
+        })
+    ));
+    let nested = "- a\n\n  ```mermaid\n  graph TD\n    A-->B\n  ```\n";
+    let r = render(nested);
+    assert!(
+        r.html.contains("<pre data-sourcepos=\"3:3-6:5\">"),
+        "{}",
+        r.html
+    );
+    let sel = Selection {
+        sourcepos: "3:3-6:5".into(),
+        text: "graph TD\n  A-->B\n".into(),
+        offset: 0,
+    };
+    assert!(matches!(
+        map_selection(nested, &sel),
+        Err(MappingError::InCodeBlock {
+            from_line: 0,
+            to_line: 1,
+            ..
+        })
+    ));
+}

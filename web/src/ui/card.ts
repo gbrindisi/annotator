@@ -89,7 +89,7 @@ export class Card {
     const quote = el('button', {
       className: 'mc-quote',
       type: 'button',
-      title: anchored ? 'Jump to the commented text' : 'No anchor to jump to',
+      title: anchored ? (c.code_lines ? 'Jump to the code block' : 'Jump to the commented text') : 'No anchor to jump to',
       disabled: !anchored,
     }, [el('span', { text: c.quote ?? '(no quote)' })]);
     quote.addEventListener('click', () => this.cb.reveal(c.id));
