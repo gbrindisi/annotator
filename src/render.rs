@@ -30,6 +30,9 @@ pub struct Rendered {
     pub raw_offset: Vec<usize>,
     /// Anchored comments: id and the anchored range in `clean` bytes.
     pub anchors: Vec<(String, Range<usize>)>,
+    /// Every code block (fenced or indented, nested ones included): its range in `clean` bytes
+    /// and the exact `data-sourcepos` of its `<pre>` in `html`.
+    pub code_blocks: Vec<(Range<usize>, String)>,
 }
 
 const OPEN_S: char = '\u{E000}';
@@ -57,6 +60,19 @@ pub fn render(raw: &str) -> Rendered {
         let starts = line_starts(&clean);
         mark_anchors(root, &clean, &starts, &anchors);
     }
+    let starts = line_starts(&clean);
+    let code_blocks = root
+        .descendants()
+        .filter_map(|n| {
+            let d = n.data.borrow();
+            matches!(d.value, NodeValue::CodeBlock(_)).then(|| {
+                (
+                    sourcepos_range(&d.sourcepos, &starts, clean.len()),
+                    d.sourcepos.to_string(),
+                )
+            })
+        })
+        .collect();
     let mut html = String::new();
     comrak::html::format_document(root, &opts, &mut html).expect("fmt to String");
     Rendered {
@@ -64,6 +80,20 @@ pub fn render(raw: &str) -> Rendered {
         clean,
         raw_offset,
         anchors,
+        code_blocks,
+    }
+}
+
+impl Rendered {
+    /// `data-sourcepos` of the `<pre>` of the code block a code-line comment (`line:`) belongs
+    /// to: the first code block overlapping the comment's anchored range (the markers wrap the
+    /// whole fence). `None` when the comment has no anchor or no code block lies inside it.
+    pub fn code_block_of(&self, id: &str) -> Option<&str> {
+        let (_, range) = self.anchors.iter().find(|(a, _)| a == id)?;
+        self.code_blocks
+            .iter()
+            .find(|(b, _)| b.start < range.end && b.end > range.start)
+            .map(|(_, sp)| sp.as_str())
     }
 }
 

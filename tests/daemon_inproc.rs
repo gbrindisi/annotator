@@ -524,6 +524,16 @@ async fn comment_intents_end_to_end() {
     let code = views.iter().find(|c| !c["code_lines"].is_null()).unwrap();
     assert_eq!(code["code_lines"], json!([1, 1]));
     assert_eq!(code["quote"], "b = 2");
+    // The UI maps the comment to its block via the `<pre data-sourcepos>` of the html.
+    assert_eq!(code["block_sourcepos"], "8:1-11:3");
+    assert!(
+        d["html"]
+            .as_str()
+            .unwrap()
+            .contains("<pre data-sourcepos=\"8:1-11:3\">"),
+        "{}",
+        d["html"]
+    );
     let id4 = code["id"].as_str().unwrap().to_string();
     assert!(
         raw.contains(&format!(

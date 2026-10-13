@@ -158,6 +158,11 @@ pub struct CommentView {
     pub code_lines: Option<(usize, usize)>,
     /// UTF-16 range of the anchored text in `raw` (between the markers), when anchored.
     pub anchor: Option<(usize, usize)>,
+    /// For code-line comments (`code_lines`): the `data-sourcepos` of the `<pre>` of the code block
+    /// it belongs to, exactly as it appears in `DocState.html`. Additive (null otherwise, absent
+    /// from older daemons); lets the UI map comments to blocks, e.g. rendered Mermaid diagrams.
+    #[serde(default)]
+    pub block_sourcepos: Option<String>,
     pub entries: Vec<EntryView>,
     /// Entries added since the last Done snapshot (round > 1), e.g. agent replies. 0 in round 1.
     pub new_entries: usize,
