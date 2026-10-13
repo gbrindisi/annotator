@@ -29,6 +29,10 @@
   --btn-bg: #f0f1f3;
   --code-bg: #f4f5f7;
   --shadow: 0 6px 24px rgba(20, 22, 26, 0.12), 0 1px 3px rgba(20, 22, 26, 0.08);
+  /* Mermaid diagram card; keep in sync with mermaidTheme.ts (card = edge-label background). */
+  --mmd-card: #f8f9fd;
+  --mmd-border: #d5daec;
+  --mmd-line: #334155;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
   --serif: 'Charter', 'Iowan Old Style', 'Source Serif Pro', Georgia, serif;
   --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
@@ -63,6 +67,9 @@
     --btn-bg: #2a2d32;
     --code-bg: #1f2226;
     --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+    --mmd-card: #1b1d23;
+    --mmd-border: #353944;
+    --mmd-line: #cbd5e1;
   }
 }
 
@@ -189,6 +196,102 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .doc .diff-del-block > :first-child { margin-top: 0; }
 .doc .diff-del-block > :last-child { margin-bottom: 0; }
 .doc .diff-del-block * { color: inherit; text-decoration: inherit; }
+
+/* ---------- Mermaid diagrams ---------- */
+/* The <pre> of a ```mermaid fence stays in the DOM (hidden); the diagram container follows it. */
+.doc .mermaid-block {
+  position: relative; margin: 0 -40px 1.4em; padding: 24px 22px 20px; font: 15px/1.4 var(--sans); color: var(--fg);
+  background: var(--mmd-card); border: 1px solid var(--mmd-border); border-radius: 12px;
+}
+.doc .mermaid-view { overflow-x: auto; text-align: center; cursor: zoom-in; user-select: none; -webkit-user-select: none; }
+.doc .mermaid-view svg { display: block; margin: 0 auto; max-width: none; height: auto; }
+.doc .mermaid-loading { padding: 28px 0; color: var(--muted); font-size: 13px; cursor: progress; }
+.doc .mermaid-block[data-state='loading'] .mermaid-view { min-height: 96px; cursor: progress; }
+
+/* hover toolbar: Comment / Source / Previous version, and the comment-count badge */
+.mermaid-toolbar { position: absolute; top: 8px; right: 10px; z-index: 2; display: flex; align-items: center; gap: 6px; }
+.mermaid-btn {
+  font: 600 12px var(--sans); padding: 4px 11px; border-radius: 999px; cursor: pointer; line-height: 1.4;
+  border: 1px solid var(--border); background: var(--bg); color: var(--fg);
+  opacity: 0; transition: opacity 120ms ease, background 120ms ease;
+}
+.mermaid-btn:hover { background: var(--btn-bg); }
+.mermaid-btn[aria-pressed='true'] { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); }
+.mermaid-block:hover .mermaid-btn, .mermaid-block:focus-within .mermaid-btn { opacity: 1; }
+@media (hover: none) { .mermaid-btn { opacity: 1; } }
+.is-closed .mermaid-btn-comment { display: none; }
+.mermaid-badge {
+  font: 700 12px var(--sans); min-width: 24px; height: 24px; padding: 0 8px; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--accent); color: #1f2328; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.mermaid-badge::before { content: '💬 '; font-size: 11px; }
+.mermaid-badge.is-resolved { background: var(--btn-bg); color: var(--muted); box-shadow: inset 0 0 0 1px var(--border); }
+.mermaid-badge:hover { filter: brightness(1.08); }
+.mermaid-badge[hidden] { display: none; }
+
+/* commented diagram: comment-highlight colour frame */
+.doc .mermaid-block[data-commented] { border-color: var(--accent); outline: 2px solid var(--accent-strong); outline-offset: 0; }
+.doc .mermaid-block[data-commented][data-view='source'] + pre { border-color: var(--accent); outline: 2px solid var(--accent-strong); }
+
+/* source view (toggle or invalid diagram): slim toolbar / error box above the code block */
+.doc .mermaid-block[data-view='source'] { margin-bottom: 0.5em; padding: 8px 12px; }
+.doc .mermaid-block[data-view='source'] .mermaid-toolbar { position: static; justify-content: flex-end; }
+.doc .mermaid-block[data-view='source'] .mermaid-btn { opacity: 1; }
+.doc .mermaid-block[data-view='source']:not([data-state='error']) > .mermaid-view { display: none; }
+.doc .mermaid-block[data-view='source'][data-state='error'] > .mermaid-view { margin-top: 6px; cursor: default; }
+.doc .mermaid-block[data-state='error'] { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 7%, var(--mmd-card)); }
+.mermaid-error { text-align: left; user-select: text; -webkit-user-select: text; }
+.mermaid-error-title { font-weight: 700; font-size: 14px; color: var(--danger); margin-bottom: 4px; }
+.mermaid-error-msg { font: 13px/1.5 var(--mono); color: var(--fg); white-space: pre-wrap; word-break: break-word; }
+
+/* round changes */
+.doc .mermaid-block[data-change] { background: var(--mmd-card); box-shadow: none; border-radius: 12px; }
+.doc .mermaid-block[data-change]::before { left: -1px; top: 12px; bottom: 12px; width: 4px; border-radius: 0 3px 3px 0; }
+.doc .mermaid-block.show-prev > .mermaid-view, .doc .mermaid-block.show-prev .mermaid-btn-source { display: none; }
+.mermaid-old, .doc .mermaid-block.is-old {
+  position: relative; border: 2px solid var(--danger); border-radius: 10px; padding: 18px 14px 12px; margin: 6px 0 2px;
+  background: color-mix(in srgb, var(--danger) 6%, var(--mmd-card));
+}
+.mermaid-old > .mermaid-view { opacity: 0.8; }
+.mermaid-old-label {
+  position: absolute; top: -11px; left: 14px; padding: 1px 10px; border-radius: 999px; z-index: 1;
+  font: 700 11px/1.6 var(--sans); letter-spacing: 0.04em; text-transform: uppercase; background: var(--danger); color: #fff;
+}
+.doc .diff-del-block .mermaid-block.is-old {
+  /* inline-block is atomic: the block's line-through does not propagate into the diagram */
+  display: inline-block; width: 100%; vertical-align: top; margin: 4px 0; opacity: 0.85; border-radius: 10px;
+}
+.doc .diff-del-block .mermaid-block.is-old, .doc .diff-del-block .mermaid-block.is-old * { text-decoration: none; }
+.doc .diff-del-block .mermaid-old-label { color: #fff; }
+
+/* mermaid measures labels in a temporary element appended to <body>: keep it off screen */
+body > div[id^='damm-'] { position: absolute; left: -10000px; top: 0; pointer-events: none; }
+
+/* SVG fine tuning that themeVariables cannot express (mermaid's own rules are #id-scoped: !important) */
+.mmd svg { font-family: var(--sans); }
+.mmd svg .edge-thickness-normal, .mmd svg .edgePaths .path, .mmd svg .flowchart-link, .mmd svg .messageLine0, .mmd svg .messageLine1,
+.mmd svg .transition, .mmd svg .relationshipLine { stroke-width: 2px !important; }
+.mmd svg .edge-thickness-thick { stroke-width: 3.5px !important; }
+.mmd svg .edgeLabel, .mmd svg .edgeLabel p, .mmd svg .edgeLabel span, .mmd svg .labelBkg { background-color: var(--mmd-card) !important; }
+.mmd svg .edgeLabel rect, .mmd svg .labelBkg rect { opacity: 1 !important; fill: var(--mmd-card) !important; }
+.mmd svg .edgeLabel, .mmd svg .edgeLabel p, .mmd svg .edgeLabel span { color: var(--fg) !important; font-weight: 500; }
+.mmd svg .cluster rect, .mmd svg .statediagram-cluster rect { stroke-dasharray: 7 4; stroke-width: 1.5px !important; }
+.mmd svg .cluster-label, .mmd svg .cluster-label *, .mmd svg .cluster text, .mmd svg .cluster span { font-weight: 700 !important; }
+.mmd svg rect.actor, .mmd svg .actor-box, .mmd svg .note, .mmd svg [class^='activation'] { stroke-width: 2px !important; }
+.mmd svg .tick text { font-size: 13px !important; } /* axis ticks default to 10px */
+.mmd svg .pieTitleText { font-weight: 700; }
+
+/* zoom overlay */
+.mermaid-zoom {
+  position: fixed; inset: 0; z-index: 200; overflow: hidden; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none;
+  background: color-mix(in srgb, var(--bg) 93%, transparent); backdrop-filter: blur(4px);
+}
+.mermaid-zoom.is-dragging { cursor: grabbing; }
+.mermaid-zoom-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.mermaid-zoom-svg { display: block; max-width: none; background: var(--mmd-card); border-radius: 12px; box-shadow: var(--shadow); }
+.mermaid-zoom-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font: 12px var(--sans); color: var(--muted); background: var(--bg); padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); pointer-events: none; white-space: nowrap; }
+.mermaid-zoom-close { position: absolute; top: 14px; right: 18px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font-size: 22px; line-height: 1; cursor: pointer; box-shadow: var(--shadow); }
+.mermaid-zoom-close:hover { background: var(--btn-bg); }
 
 /* ---------- floating comment button, toasts, flash ---------- */
 .float-comment { position: fixed; z-index: 50; font: 600 12px var(--sans); padding: 5px 12px; border-radius: 999px; border: 0; cursor: pointer; background: var(--fg); color: var(--bg); box-shadow: var(--shadow); }
