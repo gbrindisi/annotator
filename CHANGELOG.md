@@ -6,6 +6,8 @@ versions follow [SemVer](https://semver.org). Add entries under `[Unreleased]` a
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-13
+
 ### Added
 - Mermaid diagrams: ` ```mermaid ` fences render as SVG in the rendered view (mermaid v11,
   lazy-loaded only when a document has a diagram, `securityLevel: strict`) with a custom
