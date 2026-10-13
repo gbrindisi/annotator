@@ -31,6 +31,12 @@ export const fakeMarkerRanges = (raw: string): [number, number][] => {
 
 const now = () => new Date().toISOString();
 
+/** `data-sourcepos` of the first (commented) and second (modified in round 2) diagram in the fixture. */
+export const FLOWCHART_SP = '35:1-48:3';
+export const SEQUENCE_SP = '52:1-67:3';
+
+const escapeHtml = (t: string): string => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 const initialComments = (): CommentView[] => [
   {
     id: 'k3f9', status: 'open', quote: 'ship on Friday', author: 'kyle', created_at: '2026-06-17T10:00:00.000Z', orphaned: false, code_lines: null,
@@ -49,8 +55,12 @@ const initialComments = (): CommentView[] => [
     anchor: null, entries: [{ author: 'kyle', timestamp: '2026-06-17T09:00:00.000Z', text: 'Handled.' }], new_entries: 0, new_thread: false,
   },
   {
-    id: 'p7k2', status: 'open', quote: '    validate(order)', author: 'agent', created_at: null, orphaned: false, code_lines: [1, 1],
+    id: 'p7k2', status: 'open', quote: '    validate(order)', author: 'agent', created_at: null, orphaned: false, code_lines: [1, 1], block_sourcepos: '13:1-16:3',
     anchor: null, entries: [{ author: 'agent', timestamp: null, text: 'should this run before logging?' }], new_entries: 0, new_thread: false,
+  },
+  {
+    id: 'mm01', status: 'open', quote: 'flowchart LR', author: 'agent', created_at: '2026-06-17T11:00:00.000Z', orphaned: false, code_lines: [0, 11],
+    block_sourcepos: FLOWCHART_SP, anchor: null, entries: [{ author: 'agent', timestamp: '2026-06-17T11:00:00.000Z', text: 'Should the error path also notify the agent?' }], new_entries: 0, new_thread: false,
   },
   {
     id: 'orph1', status: 'open', quote: 'deleted text', author: 'me', created_at: '2026-06-17T12:00:00.000Z', orphaned: true, code_lines: null,
@@ -135,15 +145,23 @@ class FakeDaemon {
       case 'add_comment': {
         const id = newId();
         let ok = false;
+        let codeLines: [number, number] | null = null;
         this.editHtml(root => {
           const block = root.querySelector(`[data-sourcepos="${m.selection.sourcepos}"]`);
           if (!block) return;
           if (!block.textContent?.slice(m.selection.offset).startsWith(m.selection.text)) return;
+          if (block.tagName === 'PRE') {
+            // Like the daemon: a selection inside a code block becomes a line comment on that block.
+            const from = (block.textContent ?? '').slice(0, m.selection.offset).split('\n').length - 1;
+            codeLines = [from, from + m.selection.text.trimEnd().split('\n').length - 1];
+            ok = true;
+            return;
+          }
           wrapRange(block, m.selection.offset, m.selection.text.length, id);
           ok = true;
         });
         if (!ok) return this.error('Could not anchor the selection (cross-block or stale)');
-        s.comments.push({ id, status: 'open', quote: m.selection.text, author, created_at: now(), orphaned: false, code_lines: null, anchor: null, entries: [{ author, timestamp: now(), text: m.body }], new_entries: 0, new_thread: s.round > 1 });
+        s.comments.push({ id, status: 'open', quote: m.selection.text, author, created_at: now(), orphaned: false, code_lines: codeLines, block_sourcepos: codeLines ? m.selection.sourcepos : null, anchor: null, entries: [{ author, timestamp: now(), text: m.body }], new_entries: 0, new_thread: s.round > 1 });
         break;
       }
       case 'add_comment_raw': {
@@ -221,7 +239,16 @@ class FakeDaemon {
     s.round_state = 'active';
     s.waiters = 1;
     const oldP = 'Here is a second paragraph with another highlighted span placed close to the first.';
+    // The sequence diagram is edited by the agent: wording changes, same number of lines.
+    let oldSeq = '';
     this.editHtml(root => {
+      const code = root.querySelector(`pre[data-sourcepos="${SEQUENCE_SP}"] code`);
+      if (code) {
+        oldSeq = code.textContent ?? '';
+        code.textContent = oldSeq
+          .replace('D->>F: Insert markers', 'D->>F: Write the file atomically')
+          .replace('Comments live in the Markdown file', 'Comments and edits live in the Markdown file');
+      }
       const p = root.querySelector('[data-sourcepos="7:1-7:83"]');
       if (p) p.innerHTML = 'Here is a <strong data-sourcepos="7:11-7:24">rewritten</strong> second paragraph with <mark data-cid="a7b2">another highlighted span</mark>, now further away.';
       const added = document.createElement('p');
@@ -233,6 +260,7 @@ class FakeDaemon {
     s.changes = [
       { kind: 'modified', sourcepos: '7:1-7:83', old_text: oldP, after: null, old_html: `<p data-sourcepos="1:1-1:${oldP.length}">${oldP}</p>\n` },
       { kind: 'added', sourcepos: '10:1-10:61', old_text: null, after: null },
+      { kind: 'modified', sourcepos: SEQUENCE_SP, old_text: '```mermaid\n' + oldSeq + '```', after: null, old_html: `<pre data-sourcepos="1:1-${oldSeq.split('\n').length + 1}:3"><code class="language-mermaid">${escapeHtml(oldSeq)}</code></pre>\n` },
       { kind: 'removed', sourcepos: null, old_text: 'This body has no anchor any more.', after: '13:1-16:3', old_html: '<p data-sourcepos="1:1-1:33">This body has <em data-sourcepos="1:15-1:18">no</em> anchor any more.</p>\n' },
     ];
     for (const c of s.comments) {
@@ -245,7 +273,12 @@ class FakeDaemon {
       k.new_entries = 1;
     }
     s.comments.push({ id: 'ag01', status: 'open', quote: 'Thursday as the release day', author: 'agent', created_at: now(), orphaned: false, code_lines: null, anchor: null, entries: [{ author: 'agent', timestamp: now(), text: 'Added this; please confirm.' }], new_entries: 1, new_thread: true });
-    this.setRaw(s.raw.replace('Here is a second', 'Here is a **rewritten** second'));
+    this.setRaw(
+      s.raw
+        .replace('Here is a second', 'Here is a **rewritten** second')
+        .replace('D->>F: Insert markers', 'D->>F: Write the file atomically')
+        .replace('Comments live in the Markdown file', 'Comments and edits live in the Markdown file'),
+    );
     this.pushDoc();
   }
 

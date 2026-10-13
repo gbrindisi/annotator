@@ -1,5 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+// jsdom cannot lay out SVG: stand in for mermaid.js (the default loader imports it lazily).
+vi.mock('mermaid', () => ({
+  default: {
+    initialize: vi.fn(),
+    render: vi.fn(async (id: string, code: string) => {
+      if (code.includes('unclosed')) throw Object.assign(new Error('Parse error on line 4:\nExpecting something'), { hash: { line: 3 } });
+      return { svg: `<svg id="${id}" width="100" height="50" viewBox="0 0 100 50"><text>${code.split('\n')[0]}</text></svg>` };
+    }),
+  },
+}));
+
 // End-to-end smoke test: the real App against the dev mock daemon.
 describe('App with mock daemon', () => {
   beforeEach(() => {
@@ -23,7 +34,7 @@ describe('App with mock daemon', () => {
     expect(document.querySelector('mark[data-cid="zz1q"]')!.classList.contains('is-resolved')).toBe(true);
     // Open filter hides the resolved thread; order: anchored, code, orphan.
     const ids = () => [...document.querySelectorAll('.mc-list .mc-card')].map(c => c.getAttribute('data-mc-id'));
-    expect(ids()).toEqual(['k3f9', 'a7b2', 'p7k2', 'orph1']);
+    expect(ids()).toEqual(['k3f9', 'a7b2', 'p7k2', 'mm01', 'orph1']);
 
     // Reply flows through the daemon and back.
     const ta = document.querySelector<HTMLTextAreaElement>('[data-mc-id="a7b2"] textarea')!;
@@ -43,8 +54,8 @@ describe('App with mock daemon', () => {
     await vi.advanceTimersByTimeAsync(4500);
     expect(document.querySelector<HTMLElement>('.banner')!.hidden).toBe(true);
     expect(document.querySelector('.round-badge')!.textContent).toBe('Round 2');
-    expect(document.querySelectorAll('.doc [data-change]').length).toBe(3);
-    expect(document.querySelector('.pill-main')!.textContent).toBe('3 changes');
+    expect(document.querySelectorAll('.doc [data-change]').length).toBe(4);
+    expect(document.querySelector('.pill-main')!.textContent).toBe('4 changes');
     expect(document.querySelector('[data-mc-id="ag01"] .mc-badge.is-new')).not.toBeNull();
     expect(document.querySelector('[data-mc-id="k3f9"] .mc-entry.is-new')!.textContent).toContain('Moved to Thursday');
   });
@@ -128,5 +139,68 @@ describe('App with mock daemon', () => {
     const t = document.querySelector('.banner')!.textContent!;
     expect(t).toContain('Sent back to the agent.');
     expect(t).not.toContain('No agent was waiting');
+  });
+  it('renders the mock diagrams, comments on a whole diagram and shows the modified diagram in round 2', async () => {
+    vi.resetModules();
+    const { App } = await import('../app');
+    const { mockFactory } = await import('../dev/mock');
+    const sent: { type: string; selection?: { sourcepos: string; text: string; offset: number } }[] = [];
+    const factory = (u: string) => {
+      const sock = mockFactory(u);
+      const orig = sock.send.bind(sock);
+      sock.send = (d: string) => (sent.push(JSON.parse(d)), orig(d));
+      return sock;
+    };
+    new App(document.getElementById('app')!, 'ws://x/ws/dev', factory);
+    await vi.advanceTimersByTimeAsync(500);
+
+    const blocks = () => [...document.querySelectorAll<HTMLElement>('.doc .mermaid-block[data-mermaid-for]')];
+    expect(blocks().length).toBe(8);
+    expect(blocks().filter(b => b.dataset.state === 'ok').length).toBe(7);
+    const invalid = blocks()[7];
+    expect(invalid.dataset.state).toBe('error');
+    expect(invalid.querySelector('.mermaid-error-title')!.textContent).toBe('Mermaid diagram error · line 4');
+    expect(invalid.nextElementSibling!.tagName).toBe('PRE');
+    expect(document.querySelectorAll('.doc pre[hidden]').length).toBe(7);
+
+    // Existing code comment on the first diagram: framed + badge; the badge focuses its card.
+    const flow = blocks()[0];
+    expect(flow.hasAttribute('data-commented')).toBe(true);
+    const badge = flow.querySelector<HTMLElement>('.mermaid-badge')!;
+    expect(badge.textContent).toBe('1');
+    badge.click();
+    expect(document.querySelector('[data-mc-id="mm01"]')!.classList.contains('is-active')).toBe(true);
+    // Its card can jump to the block.
+    expect(document.querySelector<HTMLButtonElement>('[data-mc-id="mm01"] .mc-quote')!.disabled).toBe(false);
+
+    // Comment on the sequence diagram: payload covers the whole block.
+    const seq = blocks()[1];
+    const seqPre = document.querySelector<HTMLElement>(`pre[data-sourcepos="${seq.dataset.mermaidFor}"]`)!;
+    seq.querySelector<HTMLElement>('.mermaid-btn-comment')!.click();
+    const draft = document.querySelector<HTMLTextAreaElement>('.mc-card-draft textarea')!;
+    draft.value = 'Add the agent here';
+    draft.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    await vi.advanceTimersByTimeAsync(300);
+    const add = sent.find(m => m.type === 'add_comment')!;
+    expect(add.selection).toEqual({ sourcepos: seq.dataset.mermaidFor, text: seqPre.textContent, offset: 0 });
+    const seq2 = blocks()[1];
+    expect(seq2.hasAttribute('data-commented')).toBe(true);
+    expect(seq2.querySelector('.mermaid-badge')!.textContent).toBe('1');
+    expect(blocks()[7].hasAttribute('data-commented')).toBe(false);
+
+    // Done -> round 2: the sequence diagram was modified.
+    (document.querySelector('.btn-primary') as HTMLButtonElement).click();
+    await vi.advanceTimersByTimeAsync(4500);
+    const mod = blocks()[1];
+    expect(mod.getAttribute('data-change')).toBe('modified');
+    expect(mod.previousElementSibling!.hasAttribute('data-change')).toBe(false);
+    const prev = mod.querySelector<HTMLElement>('.mermaid-btn-prev')!;
+    prev.click();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(mod.querySelector('.mermaid-old svg')).not.toBeNull();
+    // Hide changes: everything added for the diff disappears; diagrams stay.
+    document.querySelector<HTMLElement>('.pill-toggle')!.click();
+    expect(document.querySelectorAll('.doc [data-change], .doc .mermaid-old, .doc .mermaid-btn-prev').length).toBe(0);
+    expect(blocks().length).toBe(8);
   });
 });
