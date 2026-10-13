@@ -222,12 +222,12 @@ export const mermaidConfig = (scheme: Scheme): Record<string, unknown> => {
   // Natural size (no shrink-to-fit): the container scrolls, the zoom overlay fits to screen.
   for (const k of NO_MAX_WIDTH) cfg[k] = { useMaxWidth: false };
   Object.assign(cfg, {
-    flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis', padding: 14, nodeSpacing: 50, rankSpacing: 56, diagramPadding: 12 },
+    flowchart: { useMaxWidth: false, htmlLabels: true, curve: 'basis', padding: 12, nodeSpacing: 36, rankSpacing: 44, diagramPadding: 8 },
     sequence: {
-      useMaxWidth: false, actorMargin: 56, width: 160, height: 48, boxMargin: 10, boxTextMargin: 6, noteMargin: 12, messageMargin: 40,
+      useMaxWidth: false, actorMargin: 40, width: 140, height: 48, boxMargin: 10, boxTextMargin: 6, noteMargin: 12, messageMargin: 40,
       diagramMarginX: 24, diagramMarginY: 16, actorFontSize: 16, noteFontSize: 15, messageFontSize: 15, messageAlign: 'center',
     },
-    gantt: { useMaxWidth: false, fontSize: 14, sectionFontSize: 15, barHeight: 26, barGap: 6, topPadding: 56, leftPadding: 96, useWidth: 880 },
+    gantt: { useMaxWidth: false, fontSize: 14, sectionFontSize: 15, barHeight: 26, barGap: 6, topPadding: 56, leftPadding: 96, useWidth: 640, axisFormat: '%b %e' },
     er: { useMaxWidth: false, fontSize: 15, entityPadding: 18 },
     pie: { useMaxWidth: false, textPosition: 0.72 },
     journey: { useMaxWidth: false, taskFontSize: 14, diagramMarginX: 40, diagramMarginY: 20 },

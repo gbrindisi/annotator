@@ -293,8 +293,12 @@ export class MermaidView {
   }
 
   private show(view: HTMLElement, res: RenderResult, owner: HTMLElement | null): void {
-    if (res.ok) view.innerHTML = res.svg;
-    else view.replaceChildren(errorBox(res));
+    if (res.ok) {
+      view.innerHTML = res.svg;
+      const svg = view.querySelector('svg');
+      fitSvg(svg);
+      contrastLabels(svg);
+    } else view.replaceChildren(errorBox(res));
     this.setState(owner, res.ok ? 'ok' : 'error');
   }
 
@@ -396,3 +400,58 @@ const errorBox = (res: Extract<RenderResult, { ok: false }>): HTMLElement =>
     el('div', { className: 'mermaid-error-title', text: res.line ? `Mermaid diagram error · line ${res.line}` : 'Mermaid diagram error' }),
     el('div', { className: 'mermaid-error-msg', text: res.message }),
   ]);
+
+/** Smallest scale a wide diagram is shrunk to before it scrolls instead (legibility floor). */
+export const MIN_FIT_SCALE = 0.72;
+
+/**
+ * Size a rendered SVG to its natural width, shrinking it to the column when wider (down to
+ * MIN_FIT_SCALE, then horizontal scroll). Zoom shows it full size.
+ */
+export const fitSvg = (svg: SVGSVGElement | null): void => {
+  if (!svg) return;
+  const vb = svg.viewBox?.baseVal;
+  const natural = vb && vb.width > 0 ? vb.width : parseFloat(svg.getAttribute('width') ?? '') || 0;
+  if (!natural) return;
+  svg.setAttribute('width', String(Math.ceil(natural)));
+  svg.removeAttribute('height');
+  svg.style.maxWidth = '100%';
+  svg.style.minWidth = `${Math.ceil(natural * MIN_FIT_SCALE)}px`;
+  svg.style.height = 'auto';
+};
+
+/** Relative luminance of a CSS hex/rgb colour, or null if unparseable. */
+export const luminance = (css: string): number | null => {
+  let r: number, g: number, b: number;
+  const hex = css.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  const rgb = css.trim().match(/^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i);
+  if (hex) {
+    const h = hex[1].length === 3 ? hex[1].split('').map(c => c + c).join('') : hex[1];
+    [r, g, b] = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
+  } else if (rgb) {
+    [r, g, b] = [rgb[1], rgb[2], rgb[3]].map(Number);
+  } else return null;
+  const lin = (c: number) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+};
+
+/**
+ * Nodes styled by the author (classDef / style with a fill but no text colour) keep the theme's text
+ * colour, which can vanish (light fill + dark-mode light text). Pick dark or light text by fill.
+ */
+export const contrastLabels = (svg: SVGSVGElement | null): void => {
+  if (!svg) return;
+  svg.querySelectorAll<SVGGElement>('g.node').forEach(node => {
+    const shape = node.querySelector<SVGElement>('rect, polygon, circle, ellipse, path');
+    const fill = shape?.getAttribute('style')?.match(/(?:^|;)\s*fill\s*:\s*([^;!]+)/i)?.[1];
+    if (!fill) return;
+    const lum = luminance(fill);
+    if (lum === null) return;
+    const color = lum > 0.35 ? '#0f172a' : '#f8fafc';
+    node.querySelectorAll<HTMLElement | SVGElement>('.nodeLabel, .label, foreignObject div, foreignObject span, text, tspan').forEach(el => {
+      if (/(?:^|;)\s*color\s*:/i.test(el.getAttribute('style') ?? '')) return; // author set a text colour
+      el.style.setProperty('color', color, 'important');
+      el.style.setProperty('fill', color, 'important');
+    });
+  });
+};

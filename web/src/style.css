@@ -131,7 +131,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 
 /* ---------- layout ---------- */
 .layout { flex: 1; min-height: 0; display: flex; }
-.doc-pane { flex: 1; min-width: 0; overflow-y: auto; position: relative; scroll-behavior: auto; }
+.doc-pane { flex: 1; min-width: 0; overflow-y: auto; position: relative; scroll-behavior: auto; container-type: inline-size; }
 .is-closed .doc-pane { background: var(--bg-soft); }
 .mode-source .doc-pane { overflow: hidden; display: flex; flex-direction: column; }
 .source-host { flex: 1; min-height: 0; display: flex; }
@@ -200,11 +200,14 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* ---------- Mermaid diagrams ---------- */
 /* The <pre> of a ```mermaid fence stays in the DOM (hidden); the diagram container follows it. */
 .doc .mermaid-block {
-  position: relative; margin: 0 -40px 1.4em; padding: 24px 22px 20px; font: 15px/1.4 var(--sans); color: var(--fg);
+  /* Diagrams may grow past the text column up to the pane width (centred on the column), so wide
+     ones stay legible instead of being shrunk to the 74ch measure. */
+  position: relative; box-sizing: border-box; width: fit-content; min-width: calc(100% + 80px); max-width: calc(100cqw - 48px);
+  left: 50%; transform: translateX(-50%); margin: 0 0 1.4em; padding: 24px 22px 20px; font: 15px/1.4 var(--sans); color: var(--fg);
   background: var(--mmd-card); border: 1px solid var(--mmd-border); border-radius: 12px;
 }
 .doc .mermaid-view { overflow-x: auto; text-align: center; cursor: zoom-in; user-select: none; -webkit-user-select: none; }
-.doc .mermaid-view svg { display: block; margin: 0 auto; max-width: none; height: auto; }
+.doc .mermaid-view svg { display: block; margin: 0 auto; height: auto; }
 .doc .mermaid-loading { padding: 28px 0; color: var(--muted); font-size: 13px; cursor: progress; }
 .doc .mermaid-block[data-state='loading'] .mermaid-view { min-height: 96px; cursor: progress; }
 
@@ -253,6 +256,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   background: color-mix(in srgb, var(--danger) 6%, var(--mmd-card));
 }
 .mermaid-old > .mermaid-view { opacity: 0.8; }
+.doc .mermaid-block.is-old, .mermaid-old .mermaid-block { left: auto; transform: none; min-width: 0; width: 100%; max-width: none; }
 .mermaid-old-label {
   position: absolute; top: -11px; left: 14px; padding: 1px 10px; border-radius: 999px; z-index: 1;
   font: 700 11px/1.6 var(--sans); letter-spacing: 0.04em; text-transform: uppercase; background: var(--danger); color: #fff;
@@ -274,9 +278,10 @@ body > div[id^='damm-'] { position: absolute; left: -10000px; top: 0; pointer-ev
 .mmd svg .edge-thickness-thick { stroke-width: 3.5px !important; }
 .mmd svg .edgeLabel, .mmd svg .edgeLabel p, .mmd svg .edgeLabel span, .mmd svg .labelBkg { background-color: var(--mmd-card) !important; }
 .mmd svg .edgeLabel rect, .mmd svg .labelBkg rect { opacity: 1 !important; fill: var(--mmd-card) !important; }
-.mmd svg .edgeLabel, .mmd svg .edgeLabel p, .mmd svg .edgeLabel span { color: var(--fg) !important; font-weight: 500; }
+/* No font-weight/size overrides on HTML labels: mermaid sizes boxes from its own measurement, so
+   any change here clips the text. Weight/size go through themeVariables only. */
+.mmd svg .edgeLabel, .mmd svg .edgeLabel p, .mmd svg .edgeLabel span { color: var(--fg) !important; }
 .mmd svg .cluster rect, .mmd svg .statediagram-cluster rect { stroke-dasharray: 7 4; stroke-width: 1.5px !important; }
-.mmd svg .cluster-label, .mmd svg .cluster-label *, .mmd svg .cluster text, .mmd svg .cluster span { font-weight: 700 !important; }
 .mmd svg rect.actor, .mmd svg .actor-box, .mmd svg .note, .mmd svg [class^='activation'] { stroke-width: 2px !important; }
 .mmd svg .tick text { font-size: 13px !important; } /* axis ticks default to 10px */
 .mmd svg .pieTitleText { font-weight: 700; }

@@ -19,6 +19,8 @@ versions follow [SemVer](https://semver.org). Add entries under `[Unreleased]` a
   "Previous version" toggle, removed ones show the old diagram in the removed-block box.
 - `CommentView.block_sourcepos` (protocol, additive): the `data-sourcepos` of the `<pre>` a
   code-line comment belongs to, exactly as in `DocState.html`.
+- Wide diagrams may extend past the text column up to the pane width and shrink to fit (down to
+  72%, then scroll); author-styled nodes (`classDef` fills) get dark or light text by contrast.
 - `fixtures/mermaid.md`: sample document with every supported diagram kind plus an invalid one.
 
 ## [0.2.0] - 2026-10-11

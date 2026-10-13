@@ -276,3 +276,20 @@ describe('MermaidView', () => {
     expect(document.querySelector('.mermaid-zoom')).toBeNull();
   });
 });
+
+describe('contrastLabels', () => {
+  it('uses dark text on author-styled light fills and keeps explicit colours', async () => {
+    const { contrastLabels, luminance } = await import('../mermaid');
+    expect(luminance('#ffffff')).toBeCloseTo(1);
+    expect(luminance('#000')).toBe(0);
+    const host = document.createElement('div');
+    host.innerHTML = `<svg><g class="node"><rect style="fill:#dcfce7 !important;stroke:#15803d"></rect><foreignObject><div><span class="nodeLabel">ok</span></div></foreignObject></g>
+      <g class="node"><rect style="fill:#111827"></rect><foreignObject><div><span class="nodeLabel" style="color:red">kept</span></div></foreignObject></g>
+      <g class="node"><rect></rect><foreignObject><div><span class="nodeLabel">themed</span></div></foreignObject></g></svg>`;
+    contrastLabels(host.querySelector('svg'));
+    const [a, b, c] = Array.from(host.querySelectorAll<HTMLElement>('.nodeLabel'));
+    expect(a.style.getPropertyValue('color')).toBe('rgb(15, 23, 42)');
+    expect(b.style.color).toBe('red');
+    expect(c.style.getPropertyValue('color')).toBe('');
+  });
+});
