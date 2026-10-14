@@ -278,10 +278,6 @@ export class BlockEditor {
 
   // ---------- rendering ----------
 
-  private isPreserved(h: HTMLElement): boolean {
-    return this.units.some(u => u.base === h || u.extras.includes(h));
-  }
-
   /** Index of a host of the current view in the next Doc's editable blocks (no structural change pending). */
   private plainIndex(): (el: HTMLElement) => number | null {
     const old = editableHosts(this.root);
@@ -311,7 +307,10 @@ export class BlockEditor {
     const active = this.active?.isConnected ? this.active : null;
     const caret = active ? caretOffset(active) : null;
     const plans = this.units.map(u => ({ u, i: idxOf(u.base) }));
-    const activeIdx = active && !this.isPreserved(active) ? idxOf(active) : null;
+    // Live elements that survive the rebuild: dirty blocks and new local blocks.
+    const live = (h: HTMLElement) => this.units.some(u => (u.dirty && u.base === h) || u.extras.includes(h));
+    const keepActive = !!active && live(active);
+    const activeIdx = active && !keepActive ? idxOf(active) : null;
     const activeMd = activeIdx !== null && active ? serializeBlock(active) : null;
     this.quiet = true;
     try {
@@ -348,7 +347,7 @@ export class BlockEditor {
           after = o;
         }
       }
-      let target = active && this.isPreserved(active) ? active : activeIdx !== null ? hosts[activeIdx] : null;
+      let target = keepActive ? active : activeIdx !== null ? hosts[activeIdx] : null;
       // The focused block renders exactly as it is: keep the live element (caret, native undo).
       if (active && target && target !== active && target.tagName === active.tagName && this.synced.get(target) === activeMd) {
         swapIn(target, active);

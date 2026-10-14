@@ -162,6 +162,31 @@ describe('Edit mode', () => {
     expect(sent).toEqual([{ type: 'replace_block', sourcepos: '1:1-1:5', markdown: 'Hello\n\nNew one', base_hash: 'h1' }]);
   });
 
+  it('Enter in a list item makes a new item; a comment stays with the first part', () => {
+    ed.render(doc('<ul data-sourcepos="1:1-2:5">\n<li data-sourcepos="1:1-1:13"><mark data-cid="c1">one two</mark></li>\n<li data-sourcepos="2:1-2:5">three</li>\n</ul>', 'h8'));
+    const body = root.querySelector<HTMLElement>('.li-body')!;
+    body.focus();
+    setCaret(body, 3);
+    key(body, 'Enter');
+    expect([...root.querySelectorAll('li')].map(li => li.textContent)).toEqual(['one', ' two', 'three']);
+    expect(root.querySelectorAll('mark').length).toBe(1);
+    vi.advanceTimersByTime(SAVE_DELAY);
+    expect(sent).toEqual([{ type: 'replace_block', sourcepos: '1:1-1:13', markdown: '<!--c:c1-->one<!--/c:c1-->\n\ntwo', base_hash: 'h8' }]);
+  });
+
+  it('an empty new block survives unrelated Docs and focus can go back to its predecessor', () => {
+    const p = ps()[0];
+    p.focus();
+    setCaret(p, 5);
+    key(p, 'Enter');
+    ed.render(doc(P1 + '\n<p data-sourcepos="3:1-3:6">World!</p>', 'h2'));
+    expect(ps().map(x => x.textContent)).toEqual(['Hello', '', 'World!']);
+    expect(document.activeElement).toBe(ps()[1]);
+    ps()[0].focus();
+    ed.render(doc(P1 + '\n<p data-sourcepos="3:1-3:7">World!!</p>', 'h3'));
+    expect(document.activeElement).toBe(ps()[0]);
+  });
+
   it('Backspace at the start of a block merges it into the previous one', () => {
     const p2 = ps()[1];
     p2.focus();

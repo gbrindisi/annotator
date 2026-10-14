@@ -501,6 +501,10 @@ export class App {
   private done(): void {
     if (this.sidebar.hasUnsentText() && !window.confirm('You have an unsent comment. Send the review back anyway?')) return;
     this.flushSave();
+    if (this.blockEdit.inConflict) {
+      this.toast('Resolve the "file changed on disk" notice first (Keep mine or Reload).', 'error');
+      return;
+    }
     // Decide the closed-banner wording now: the waiter count drops right after round_closed.
     if (this.doc) this.doneNoWaiter = this.noWaiter(this.doc);
     this.blockEdit.whenSaved(() => this.send(msg.done()));
