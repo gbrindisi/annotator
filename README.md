@@ -28,8 +28,8 @@ make install      # builds the web UI + release binary, installs to ~/bin (BINDI
 ## Use
 
 ```bash
-annotator open plan.md          # opens a tab, blocks until Done (exit 0) or Abandon (exit 2)
-annotator open plan.md --json   # summary as JSON
+annotator open plan.md          # opens a tab, blocks until Done (exit 0) or Abandon (exit 2); prints the comments and a diff of the edits
+annotator open plan.md --json   # the review as JSON (comments + diff of the reviewer's edits)
 annotator open plan.md --no-wait  # register/join the round, open the tab, exit 0 (no agent waiting)
 annotator status                # daemon and sessions
 annotator stop                  # stop the daemon

@@ -6,6 +6,15 @@ versions follow [SemVer](https://semver.org). Add entries under `[Unreleased]` a
 
 ## [Unreleased]
 
+### Changed
+- The summary printed when the reviewer clicks Done now carries the full review: every touched
+  comment thread with its id, kind (`new`, `reply`, `edited`, `resolved`, `reopened`, `deleted`),
+  anchored text and the entries added, plus the reviewer's text edits as a unified diff (comment
+  markers and bodies excluded). Same in `--json`.
+- `Summary` (protocol, additive): `diff: String` and `comments: Vec<CommentActivity>`; existing
+  fields unchanged.
+- `skill/SKILL.md` describes the new output.
+
 ## [0.3.0] - 2026-10-13
 
 ### Added

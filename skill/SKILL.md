@@ -29,20 +29,35 @@ your turn.
 
 ## When it returns
 
-Exit 0 prints something like:
+Exit 0 prints the review itself: the comments and the reviewer's direct edits.
 
 ```
-annotator: review of /abs/plan.md finished (round 1)
-- 3 new comments: k3f9, a1b2, zz9q
-- 1 reply on an existing comment: p7k2
-- resolved: none; deleted: none
-- edits: 2 hunks, +5 -1 lines
+annotator: review of /abs/plan.md finished (round 2)
+
+## Comments (2 new, 1 reply)
+[k3f9] new on "ship on Friday"
+  bomber: I thought we agreed Thursday?
+[p7k2] reply on code lines 2-3 ("validate(order)")
+  bomber: yes, before logging
+
+## Edits (1 hunk, +1 -1)
+--- plan.md (round 2 start)
++++ plan.md (after review)
+@@ -10,3 +10,3 @@
+...
 ```
 
-`--json` gives the same as JSON. Exit 2 means the user abandoned the review: don't act on it
-unless they say so. Exit 1 is an error (message on stderr).
+- Each comment shows its id, kind (`new`, `reply`, `edited`, `resolved`, `reopened`, `deleted`),
+  the text it is anchored to, and the entries added this round. Answer each by id.
+- The diff is the reviewer's direct text edits, comment markers excluded. **Their edits win** over
+  your version: keep them, don't revert them.
+- Still **re-read the file** before editing: the diff has no comment markers and may not show
+  everything in context.
+- `- no changes` means the reviewer sent it back untouched.
 
-Then **re-read the file**: the user may have edited the text directly, and their edits win.
+`--json` gives the same as JSON (`summary.diff`, `summary.comments[]` with `id`, `kind`, `quote`,
+`new_entries`, ...). Exit 2 means the user abandoned the review: don't act on it unless they say
+so. Exit 1 is an error (message on stderr).
 
 ## The comment format
 

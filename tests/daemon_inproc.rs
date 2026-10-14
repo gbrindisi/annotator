@@ -1,7 +1,7 @@
 //! In-process daemon tests: the router is driven over in-memory duplex streams, so these run
 //! even where loopback TCP is unavailable.
 
-use annotator::protocol::{OpenResponse, StatusResponse, WaitResult};
+use annotator::protocol::{CommentKind, OpenResponse, StatusResponse, WaitResult};
 use axum::Router;
 use axum::body::Body;
 use futures_util::{SinkExt, StreamExt};
@@ -687,15 +687,31 @@ async fn round_two_changes_new_entries_and_summary() {
         (1, 1, 0)
     );
     let text = annotator::summary::to_text(&summary);
+    assert!(text.contains("## Comments (1 new, 1 reply)"), "{text}");
     assert!(
-        text.contains(&format!("- 1 new comment: {new_id}")),
+        text.contains(&format!("[{new_id}] new on \"old\"")),
         "{text}"
     );
+    assert!(text.contains("  agent: rewrite\n"), "{text}");
     assert!(
-        text.contains("- 1 reply on an existing comment: p7k2"),
+        text.contains("[p7k2] reply on \"this\"\n  agent: yes\n"),
         "{text}"
     );
-    assert!(text.contains("- edits: 1 hunk, +1 -0 lines"), "{text}");
+    assert!(text.contains("## Edits (1 hunk, +1 -0)"), "{text}");
+    assert!(text.contains("+more\n"), "{text}");
+    // Structured payload: diff on clean text, comment activity in document order.
+    assert!(
+        summary
+            .diff
+            .starts_with("--- r2.md (round 1 start)\n+++ r2.md (after review)\n")
+    );
+    assert!(!summary.diff.contains("<!--"), "{}", summary.diff);
+    let ids: Vec<_> = summary.comments.iter().map(|c| c.id.as_str()).collect();
+    assert_eq!(ids, ["p7k2", new_id.as_str()]);
+    assert_eq!(summary.comments[0].kind, CommentKind::Reply);
+    assert_eq!(summary.comments[0].new_entries[0].text, "yes");
+    assert_eq!(summary.comments[1].kind, CommentKind::New);
+    assert_eq!(summary.comments[1].quote, "old");
 
     // Agent: replies to the new thread, rewrites a paragraph, removes another.
     let cur = std::fs::read_to_string(&file).unwrap();
