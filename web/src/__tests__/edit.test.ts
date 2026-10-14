@@ -60,13 +60,25 @@ describe('Edit mode', () => {
     vi.advanceTimersByTime(SAVE_DELAY);
     ed.render(doc('<p data-sourcepos="1:1-1:11">Hello there</p>\n' + P2, 'h2'));
     const p = ps()[0];
-    expect(p).not.toBe(live); // the daemon's render replaced the local DOM
+    expect(p).toBe(live); // renders identically: the live element (and its undo history) stays
     expect(p.getAttribute('data-sourcepos')).toBe('1:1-1:11');
     expect(document.activeElement).toBe(p);
     expect(caretOffset(p)).toBe(5);
     type(p, 'Hello there!');
     vi.advanceTimersByTime(SAVE_DELAY);
     expect(sent[1]).toMatchObject({ sourcepos: '1:1-1:11', base_hash: 'h2' });
+  });
+
+  it('a clean focused block re-syncs when the Doc changes it (e.g. a new comment) and keeps the caret', () => {
+    const live = ps()[0];
+    live.focus();
+    setCaret(live, 4);
+    ed.render(doc('<p data-sourcepos="1:1-1:5">He<mark data-cid="n1">ll</mark>o</p>\n' + P2, 'h2'));
+    const p = ps()[0];
+    expect(p).not.toBe(live);
+    expect(p.querySelector('mark')).not.toBeNull();
+    expect(document.activeElement).toBe(p);
+    expect(caretOffset(p)).toBe(4);
   });
 
   it('never clobbers a dirty block: other blocks update, the edit is re-targeted', () => {

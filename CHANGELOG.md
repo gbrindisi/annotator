@@ -6,6 +6,20 @@ versions follow [SemVer](https://semver.org). Add entries under `[Unreleased]` a
 
 ## [Unreleased]
 
+### Added
+- **Edit** mode (mode toggle is now `Read | Edit | Source`): WYSIWYG typing in the rendered view.
+  Paragraphs, headings, list items, blockquote paragraphs and table cells are editable in place;
+  each edited block is serialized on its own and saved live (debounced, and on blur), so the rest of
+  the file stays byte-identical and comment anchors survive (`<mark>` -> `<!--c:ID-->` markers).
+  Enter splits a block, Backspace at its start merges it into the previous one, Ctrl/Cmd-B / I / E /
+  K toggle bold / italic / code / link, task checkboxes are clickable, paste is plain text. Code
+  blocks and diagrams stay read-only (edit them in Source mode); a closed round disables Edit mode.
+  A dirty block is never overwritten by an incoming update; a conflicting change on disk shows the
+  "file changed on disk" notice with Reload / Keep mine.
+- Protocol (additive): `ClientMsg::ReplaceBlock { sourcepos, markdown, base_hash }` and
+  `ClientMsg::MergeBlocks { first, second, markdown, base_hash }`, hash-checked like
+  `replace_source`; rejected (file untouched) when comment markers would become unbalanced.
+
 ## [0.3.0] - 2026-10-13
 
 ### Added

@@ -312,6 +312,7 @@ export class BlockEditor {
     const caret = active ? caretOffset(active) : null;
     const plans = this.units.map(u => ({ u, i: idxOf(u.base) }));
     const activeIdx = active && !this.isPreserved(active) ? idxOf(active) : null;
+    const activeMd = activeIdx !== null && active ? serializeBlock(active) : null;
     this.quiet = true;
     try {
       // Daemon-generated, sanitized HTML (comrak safe mode); inserted, never evaluated.
@@ -329,16 +330,17 @@ export class BlockEditor {
           if (u.dirty) this.cb.toast('An unsaved edit could not be kept: the block moved in the file.', 'error');
           continue;
         }
-        if (u.merge) {
+        if (!u.dirty) {
+          // Only holds a new empty block: adopt the fresh render of its predecessor.
+          u.base = cp;
+        } else if (u.merge) {
           const second = hosts[(i as number) + 1];
           if (second) {
             u.merge.sp = spOf(second) ?? u.merge.sp;
             removeHost(second);
           }
         }
-        const sp = cp.getAttribute('data-sourcepos');
-        cp.replaceWith(u.base);
-        if (sp) u.base.setAttribute('data-sourcepos', sp);
+        if (u.dirty) swapIn(cp, u.base);
         let after = outerOf(u.base);
         for (const x of u.extras) {
           const o = outerOf(x);
@@ -346,7 +348,13 @@ export class BlockEditor {
           after = o;
         }
       }
-      const target = active && this.isPreserved(active) ? active : activeIdx !== null ? hosts[activeIdx] : null;
+      let target = active && this.isPreserved(active) ? active : activeIdx !== null ? hosts[activeIdx] : null;
+      // The focused block renders exactly as it is: keep the live element (caret, native undo).
+      if (active && target && target !== active && target.tagName === active.tagName && this.synced.get(target) === activeMd) {
+        swapIn(target, active);
+        this.synced.set(active, activeMd!);
+        target = active;
+      }
       this.active = null;
       if (target?.isConnected && this.root.contains(target)) {
         this.active = target;
@@ -372,6 +380,7 @@ export class BlockEditor {
     const inf = this.inflight;
     if (!inf || doc.hash === this.baseHash) return false;
     const hosts = this.detachedHosts(doc);
+    if (inf.sent.length === 1 && inf.sent[0] === '') return true; // the block was emptied (removed)
     return inf.sent.every((md, k) => {
       const h = hosts[inf.idx + k];
       return !!h && ser(h, k) === md;
@@ -633,7 +642,6 @@ export class BlockEditor {
     if (this.inflight || this.conflictDoc || this.closed || blockKind(h) === 'cell') return;
     const own = this.unitOf(h);
     if (this.units.some(u => u !== own && u.dirty)) return this.flush();
-    if (own?.merge && !own.dirty) return;
     const r = this.range(h);
     if (!r) return;
     if (!r.collapsed) r.deleteContents();
@@ -714,6 +722,13 @@ const boxHost = (box: HTMLInputElement): HTMLElement | null => {
   if (body) return body;
   const p = box.parentElement?.querySelector<HTMLElement>(':scope > p');
   return p && taskBox(p) === box ? p : null;
+};
+
+/** Put the live element `live` where the freshly rendered `cp` is (keeping the new sourcepos). */
+const swapIn = (cp: HTMLElement, live: HTMLElement): void => {
+  const sp = cp.getAttribute('data-sourcepos');
+  cp.replaceWith(live);
+  if (sp) live.setAttribute('data-sourcepos', sp);
 };
 
 const removeHost = (h: HTMLElement): void => {

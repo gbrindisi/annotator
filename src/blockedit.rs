@@ -49,6 +49,12 @@ pub fn replace_block(raw: &str, sourcepos: &str, markdown: &str) -> Result<Strin
     let root = parse_document(&arena, &doc.clean, &options());
     let (_, t) = doc.target(root, sourcepos)?;
     let edit = t.build(markdown)?;
+    if edit.first.is_empty() && edit.extra.is_empty() && t.top_level {
+        // The reviewer deleted the whole paragraph: remove its line and one blank line.
+        let out = remove_line(raw, t.range.clone());
+        verify(&out, &t.owned, &edit)?;
+        return Ok(out);
+    }
     let mut out = String::with_capacity(raw.len() + markdown.len());
     out.push_str(&raw[..t.range.start]);
     out.push_str(&edit.first);
@@ -251,6 +257,8 @@ struct Target {
     task: Option<(usize, char)>,
     /// Empty ATX heading: a `#` right before / after the insertion point needs a space.
     pad: (bool, bool),
+    /// A paragraph at the top level of the document (no container prefix).
+    top_level: bool,
 }
 
 struct Edit {
@@ -553,6 +561,7 @@ impl<'r> Doc<'r> {
                 after_content,
                 task,
                 pad,
+                top_level: kind == Kind::Paragraph && first_prefix.is_empty() && !item_text,
             },
         ))
     }
@@ -675,6 +684,21 @@ fn bump(marker: &str, by: usize) -> String {
         },
         None => marker.to_string(),
     }
+}
+
+/// Remove a top-level block's content range, its newline and a following blank line when one
+/// precedes it too (so `a\n\nb\n\nc` loses exactly `b\n\n`). Comment bodies stay.
+fn remove_line(raw: &str, mut r: Range<usize>) -> String {
+    let b = raw.as_bytes();
+    let line_start = r.start == 0 || b[r.start - 1] == b'\n';
+    if line_start && b.get(r.end) == Some(&b'\n') {
+        r.end += 1;
+        let blank_before = r.start < 2 || b[r.start - 2] == b'\n';
+        if blank_before && b.get(r.end) == Some(&b'\n') {
+            r.end += 1;
+        }
+    }
+    format!("{}{}", &raw[..r.start], &raw[r.end..])
 }
 
 /// Toggle the task checkbox symbol (a byte before the replaced range, so offsets still hold).
@@ -957,6 +981,19 @@ mod tests {
             merge_blocks(raw, &b[0], &b[1], "Headbody\nmore").unwrap(),
             "# Headbody more\n"
         );
+    }
+
+    #[test]
+    fn emptied_paragraph_is_removed() {
+        assert_eq!(rep("a\n\nb\n\nc\n", 1, ""), "a\n\nc\n");
+        assert_eq!(rep("b\n\nc\n", 0, ""), "c\n");
+        assert_eq!(rep("a\n\nb\n", 1, ""), "a\n\n");
+        let raw = "a\n\nb <!--c:x1-->y<!--/c:x1-->\n<!--co:x1 status:open\nme: q\n-->\n\nc\n";
+        let out = rep(raw, 1, "");
+        assert_eq!(out, "a\n\n<!--co:x1 status:open\nme: q\n-->\n\nc\n");
+        assert!(parse_comments(&out)[0].is_orphan());
+        // Inside containers only the content goes.
+        assert_eq!(rep("> q\n", 0, ""), "> \n");
     }
 
     #[test]
