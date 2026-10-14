@@ -1,7 +1,36 @@
+# Build outputs
 /target
 web/node_modules
 web/dist/*
 !web/dist/.gitkeep
-spike/out.html
-.pi/
 macos/build/
+spike/out.html
+
+# Agent / tooling state (never public)
+.pi/
+.sweatshop/
+.sweatshop-tasks/
+.claude/
+.cursor/
+.aider*
+.security/
+AGENTS.local.md
+plans/
+
+# Local environment and secrets
+.env
+.env.*
+*.pem
+*.key
+.npmrc.local
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Logs
+*.log
+npm-debug.log*

@@ -4,6 +4,11 @@ version = "0.4.0"
 edition = "2024"
 description = "Local review sessions for agent-written Markdown: render, comment, send back"
 license = "MIT"
+authors = ["Gianluca Brindisi <g@brindi.si>"]
+repository = "https://github.com/gbrindisi/annotator"
+readme = "README.md"
+keywords = ["markdown", "review", "agents", "comments", "cli"]
+categories = ["command-line-utilities", "text-processing"]
 
 [[bin]]
 name = "annotator"

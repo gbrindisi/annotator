@@ -13,7 +13,7 @@ agent ── annotator open plan.md ──▶ daemon ──▶ browser tab (rend
 ```
 
 Comments are stored inline as HTML comments, byte-compatible with
-[markedit-comments](https://codebahn.net/g/markedit-comments) and Obsidian
+markedit-comments (a MarkEdit plugin) and Obsidian
 [Document Comments](https://github.com/kylemcd/obsidian-document-comments), so they travel with
 the file and agents can read them without any tooling.
 

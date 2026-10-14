@@ -3,6 +3,18 @@
 Versions follow SemVer and live in `Cargo.toml` (source of truth, shown by `annotator --version`)
 and `web/package.json` (kept in sync). Tags are `vX.Y.Z` on `main`.
 
+## Remotes
+
+`main` and tags go to both codebahn and GitHub. `origin` fetches from codebahn and has two push
+URLs, so a plain `git push` (and the release script) updates both:
+
+```bash
+git remote set-url --add --push origin git@codebahn.net:g/annotator.git
+git remote set-url --add --push origin git@github-personal:gbrindisi/annotator.git
+```
+
+`github` is also a separate remote for fetching from GitHub directly.
+
 ## Day to day
 
 Add a line under `## [Unreleased]` in `CHANGELOG.md` with every user-visible change
