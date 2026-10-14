@@ -6,6 +6,8 @@ versions follow [SemVer](https://semver.org). Add entries under `[Unreleased]` a
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-14
+
 ### Changed
 - The summary printed when the reviewer clicks Done now carries the full review: every touched
   comment thread with its id, kind (`new`, `reply`, `edited`, `resolved`, `reopened`, `deleted`),
