@@ -26,6 +26,8 @@ fn setup() -> H {
     unsafe { std::env::set_var("ANNOTATOR_BROWSER", "none") };
     let home = tempfile::tempdir().unwrap();
     let p = home.path().to_path_buf();
+    // Deterministic reviewer name regardless of the host's $USER.
+    std::fs::write(p.join("config.toml"), "author = \"agent\"\n").unwrap();
     H {
         router: annotator::daemon::test_router(p.clone(), PORT, TOKEN.into()).unwrap(),
         home: p,

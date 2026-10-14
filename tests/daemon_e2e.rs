@@ -255,7 +255,7 @@ async fn client_done_rounds_and_join() {
     let (code, out) = wait_child(client).await;
     assert_eq!(code, 0);
     assert!(out.contains("finished (round 1)"), "{out}");
-    assert!(out.contains("edits: 1 hunk, +2 -1 lines"), "{out}");
+    assert!(out.contains("## Edits (1 hunk, +2 -1)"), "{out}");
     assert!(sdir.join("done-1.md").exists());
     // A late waiter on round 1 gets the result immediately.
     match d.wait(&id, 1).await {
