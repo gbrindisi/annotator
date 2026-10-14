@@ -2,23 +2,27 @@ import { applyChanges, clearChanges } from './changes';
 import { Connection, type ConnState, type SocketFactory } from './connection';
 import { cidAt, markOrder, marksFor, styleMarks } from './marks';
 import { MermaidView, type Loader } from './mermaid';
+import { BlockEditor } from './edit';
 import { docFromMsg, msg, type ClientMsg, type DocState, type Selection, type ServerMsg } from './protocol';
 import { currentRange, selectionPayload } from './selection';
 import { SourceEditor } from './source';
 import { el } from './ui/dom';
 import { Sidebar } from './ui/sidebar';
 
-type Mode = 'rendered' | 'source';
+/** `rendered` = Read (the stored value predates Edit mode). */
+type Mode = 'rendered' | 'edit' | 'source';
 const MODE_KEY = 'annotator.mode';
 const CHANGES_KEY = 'annotator.showChanges';
 const SAVE_DEBOUNCE = 500;
+
+const parseMode = (v: string | null): Mode => (v === 'source' || v === 'edit' ? v : 'rendered');
 
 export const baseName = (p: string): string => p.split(/[\\/]/).pop() || p;
 
 export class App {
   private conn: Connection;
   private doc: DocState | null = null;
-  private mode: Mode = localStorage.getItem(MODE_KEY) === 'source' ? 'source' : 'rendered';
+  private mode: Mode = parseMode(localStorage.getItem(MODE_KEY));
   private closed = false;
   private closedRound = 0;
   /** Whether nobody was waiting when Done was clicked here (null = unknown / not via this tab). */
@@ -64,6 +68,8 @@ export class App {
   private sidebar: Sidebar;
   private editor: SourceEditor;
   private mermaid: MermaidView;
+  private blockEdit: BlockEditor;
+  private savedTop = 0;
 
   constructor(mount: HTMLElement, url: string, factory?: SocketFactory, opts: { mermaidLoader?: Loader } = {}) {
     this.root = mount;
@@ -76,7 +82,8 @@ export class App {
       b.addEventListener('click', () => this.setMode(m));
       return b;
     };
-    this.modeBtns = { rendered: mk('rendered', 'Rendered'), source: mk('source', 'Source') };
+    this.modeBtns = { rendered: mk('rendered', 'Read'), edit: mk('edit', 'Edit'), source: mk('source', 'Source') };
+    this.modeBtns.edit.title = 'Type directly in the document; edits are saved as you go';
     this.changesPill.append(this.changesStep, this.changesToggle);
     this.changesLegend.append(
       el('span', { className: 'legend-ins', text: 'added' }),
@@ -101,7 +108,7 @@ export class App {
       this.noWaiterEl,
       this.changesPill,
       this.changesLegend,
-      el('div', { className: 'seg' }, [this.modeBtns.rendered, this.modeBtns.source]),
+      el('div', { className: 'seg' }, [this.modeBtns.rendered, this.modeBtns.edit, this.modeBtns.source]),
       this.abandonBtn,
       this.doneBtn,
     ]);
@@ -112,6 +119,14 @@ export class App {
       onChange: text => this.onSourceEdit(text),
       onSelectionChange: () => this.updateFloat(),
       onCommentShortcut: () => this.startComment(),
+    });
+
+    this.blockEdit = new BlockEditor(this.rendered, {
+      send: m => this.conn.send(m),
+      toast: (t, k) => this.toast(t, k),
+      conflict: open => (open ? this.showNotice('edit') : (this.notice.hidden = true)),
+      beforeRender: () => (this.savedTop = this.pane.scrollTop),
+      afterRender: reset => this.afterRender(reset),
     });
 
     this.bind();
@@ -162,7 +177,7 @@ export class App {
       if (document.visibilityState === 'visible' && document.hasFocus()) this.clearUnseen();
     });
     window.addEventListener('beforeunload', e => {
-      if (this.dirty || this.sidebar.hasUnsentText()) e.preventDefault();
+      if (this.dirty || this.blockEdit.dirty || this.sidebar.hasUnsentText()) e.preventDefault();
     });
   }
 
@@ -174,7 +189,10 @@ export class App {
 
   onMessage(m: ServerMsg): void {
     if (m.type === 'doc') this.onDoc(docFromMsg(m));
-    else if (m.type === 'error') this.toast(m.message + (m.reloaded ? ' (reloaded)' : ''), 'error');
+    else if (m.type === 'error') {
+      if (this.blockEdit.onError(m.message, m.reloaded)) return;
+      this.toast(m.message + (m.reloaded ? ' (reloaded)' : ''), 'error');
+    }
     else if (m.type === 'round_closed') {
       if (this.doneNoWaiter === null && this.doc && this.closedRound < m.round) this.doneNoWaiter = this.noWaiter(this.doc);
       this.closed = true;
@@ -203,12 +221,14 @@ export class App {
 
   private renderRendered(resetScroll: boolean): void {
     if (!this.doc) return;
-    const top = this.pane.scrollTop;
-    // Daemon-generated, sanitized HTML (comrak safe mode); inserted, never evaluated.
-    this.rendered.innerHTML = this.doc.html;
+    // The block editor owns the rendered DOM: it keeps blocks with unsaved edits in place.
+    this.blockEdit.render(this.doc, resetScroll);
+  }
+
+  private afterRender(resetScroll: boolean): void {
     this.mermaid.attach(this.rendered); // async: never blocks the rest of the render
     this.decorateRendered();
-    if (this.mode === 'rendered') this.pane.scrollTop = resetScroll ? 0 : top;
+    if (this.mode !== 'source') this.pane.scrollTop = resetScroll ? 0 : this.savedTop;
   }
 
   private decorateRendered(): void {
@@ -218,6 +238,7 @@ export class App {
     this.mermaid.decorateChanges(this.rendered);
     this.mermaid.decorateComments(this.rendered, this.doc.comments);
     if (this.changeIdx >= this.changeEls.length) this.changeIdx = -1;
+    this.blockEdit.afterDecorate();
   }
 
   private syncSource(doc: DocState, force: boolean): void {
@@ -247,17 +268,23 @@ export class App {
     this.notice.hidden = true;
   }
 
-  private showNotice(): void {
+  /** "File changed on disk" notice, for Source mode autosave or Edit mode block saves. */
+  private showNotice(kind: 'source' | 'edit' = 'source'): void {
     const reload = el('button', { className: 'btn btn-small', type: 'button', text: 'Reload' });
-    reload.addEventListener('click', () => this.doc && this.acceptDoc(this.doc));
-    const keep = el('button', { className: 'btn btn-small btn-ghost', type: 'button', text: 'Keep my version' });
-    keep.addEventListener('click', () => {
-      if (!this.doc) return;
-      this.baseHash = this.doc.hash;
-      this.stale = null;
-      this.notice.hidden = true;
-      this.flushSave();
-    });
+    const keep = el('button', { className: 'btn btn-small btn-ghost', type: 'button', text: 'Keep mine' });
+    if (kind === 'edit') {
+      reload.addEventListener('click', () => this.blockEdit.reload());
+      keep.addEventListener('click', () => this.blockEdit.keepMine());
+    } else {
+      reload.addEventListener('click', () => this.doc && this.acceptDoc(this.doc));
+      keep.addEventListener('click', () => {
+        if (!this.doc) return;
+        this.baseHash = this.doc.hash;
+        this.stale = null;
+        this.notice.hidden = true;
+        this.flushSave();
+      });
+    }
     this.notice.replaceChildren(el('span', { text: 'The file changed on disk while you were editing.' }), el('span', { className: 'spacer' }), keep, reload);
     this.notice.hidden = false;
   }
@@ -292,7 +319,7 @@ export class App {
       return;
     }
     let rect: { left: number; top: number; bottom: number } | null = null;
-    if (this.mode === 'rendered') {
+    if (this.mode !== 'source') {
       const range = currentRange();
       const p = range ? selectionPayload(range, this.rendered) : null;
       if (range && p) {
@@ -319,15 +346,28 @@ export class App {
 
   private startComment(): void {
     if (this.closed || !this.doc) return;
-    if (this.mode === 'rendered') {
-      const p = selectionPayload(currentRange(), this.rendered);
+    if (this.mode !== 'source') {
+      const range = currentRange();
+      const p = selectionPayload(range, this.rendered);
       if (!p) return;
       if (!p.ok) {
         this.toast(p.error, 'error');
         return;
       }
       const selection = p.selection;
-      this.sidebar.openDraft({ quote: selection.text, submit: body => this.send(msg.addComment(selection, body)) });
+      // Edit mode: the block may have unsaved edits. Save first, then refer to the block by its
+      // (possibly updated) sourcepos.
+      const host = this.blockEdit.hostAt(range?.commonAncestorContainer ?? null);
+      const idx = host ? this.blockEdit.indexOf(host) : -1;
+      this.sidebar.openDraft({
+        quote: selection.text,
+        submit: body =>
+          this.blockEdit.whenSaved(() => {
+            const h = idx >= 0 ? this.blockEdit.hostByIndex(idx) : null;
+            const sp = h ? (h.closest('[data-sourcepos]')?.getAttribute('data-sourcepos') ?? null) : null;
+            this.send(msg.addComment(sp ? { ...selection, sourcepos: sp } : selection, body));
+          }),
+      });
     } else {
       const s = this.editor.selection();
       if (!s) return;
@@ -397,16 +437,27 @@ export class App {
   private setMode(m: Mode): void {
     if (m === this.mode) return;
     if (this.mode === 'source') this.flushSave();
-    this.mode = m;
-    localStorage.setItem(MODE_KEY, m);
-    this.sidebar.closeDraft();
-    this.applyMode();
+    if (this.mode === 'edit' && this.blockEdit.inConflict) {
+      this.toast('Resolve the "file changed on disk" notice first (Keep mine or Reload).', 'error');
+      return;
+    }
+    const go = () => {
+      this.mode = m;
+      localStorage.setItem(MODE_KEY, m);
+      this.sidebar.closeDraft();
+      this.applyMode();
+    };
+    // Leaving Edit mode: let pending block saves land first (usually immediate).
+    if (this.mode === 'edit') this.blockEdit.whenSaved(go);
+    else go();
   }
 
   private applyMode(): void {
-    this.rendered.hidden = this.mode !== 'rendered';
+    this.rendered.hidden = this.mode === 'source';
     this.sourceHost.hidden = this.mode !== 'source';
     this.root.classList.toggle('mode-source', this.mode === 'source');
+    this.root.classList.toggle('mode-edit', this.mode === 'edit' && !this.closed);
+    this.blockEdit.setEnabled(this.mode === 'edit' && !this.closed);
     for (const [k, b] of Object.entries(this.modeBtns)) b.classList.toggle('is-on', k === this.mode);
     this.floatBtn.hidden = true;
     if (this.mode === 'source') requestAnimationFrame(() => this.editor.view.requestMeasure());
@@ -417,6 +468,12 @@ export class App {
     const ro = this.closed;
     this.root.classList.toggle('is-closed', ro);
     this.editor.setReadOnly(ro);
+    // A closed round is read-only: Edit mode shows the document as in Read mode.
+    this.blockEdit.setClosed(ro);
+    this.blockEdit.setEnabled(this.mode === 'edit' && !ro);
+    this.root.classList.toggle('mode-edit', this.mode === 'edit' && !ro);
+    this.modeBtns.edit.disabled = ro;
+    this.modeBtns.edit.title = ro ? 'Editing is off while the round is closed' : 'Type directly in the document; edits are saved as you go';
     this.doneBtn.disabled = ro;
     this.abandonBtn.disabled = ro;
     if (ro) {
@@ -446,7 +503,7 @@ export class App {
     this.flushSave();
     // Decide the closed-banner wording now: the waiter count drops right after round_closed.
     if (this.doc) this.doneNoWaiter = this.noWaiter(this.doc);
-    this.send(msg.done());
+    this.blockEdit.whenSaved(() => this.send(msg.done()));
   }
 
   /** Active round and no agent blocked on `annotator open` (older daemons: assume waiting). */
@@ -456,7 +513,7 @@ export class App {
 
   private stepChange(dir: number): void {
     if (!this.changeEls.length) return;
-    if (this.mode !== 'rendered') this.setMode('rendered');
+    if (this.mode === 'source') this.setMode('rendered');
     this.changeIdx = (this.changeIdx + dir + this.changeEls.length) % this.changeEls.length;
     const target = this.changeEls[this.changeIdx];
     target.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -509,6 +566,7 @@ export class App {
     this.connEl.textContent = s === 'open' ? 'Live' : s === 'connecting' ? 'Connecting…' : `Offline · retry in ${Math.round((retryIn ?? 0) / 1000)}s`;
     this.connEl.title = s === 'closed' ? 'Click to reconnect now' : s === 'open' ? 'Connected to the annotator daemon' : '';
     if (s === 'open' && this.dirty) this.flushSave();
+    if (s === 'open' && this.blockEdit.dirty) this.blockEdit.flush();
   }
 
   toast(text: string, kind: 'info' | 'error' = 'info'): void {
