@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Cut a release: bump versions, roll the changelog, verify, commit, tag, push.
-# Usage: scripts/release.sh X.Y.Z   (RELEASE_PUSH=0 to skip pushing)
+# Usage: scripts/release.sh X.Y.Z   (RELEASE_PUSH=0 to skip pushing; pushes to all remotes)
 set -euo pipefail
 
 die() { echo "release: $*" >&2; exit 1; }
@@ -39,10 +39,21 @@ git commit -q -m "chore(release): $tag"
 git tag -a "$tag" -m "annotator $tag"
 echo "release: committed and tagged $tag"
 
+# Push to every push URL of every remote, each once (a remote may have several push URLs, and two
+# remotes may share one).
+push_urls() {
+  for r in $(git remote); do git remote get-url --push --all "$r"; done | awk '!seen[$0]++'
+}
+
 if [[ "${RELEASE_PUSH:-1}" == 1 ]]; then
-  git push -q origin main "$tag"
-  echo "release: pushed main and $tag"
+  urls="$(push_urls)"
+  [[ -n "$urls" ]] || die "no remotes configured; tag $tag is local only"
+  while read -r url; do
+    git push -q "$url" main "$tag"
+    echo "release: pushed main and $tag to $url"
+  done <<<"$urls"
 else
-  echo "release: not pushed; run: git push origin main $tag"
+  echo "release: not pushed; to publish, push main and $tag to each remote:"
+  push_urls | sed "s|^|  git push |; s|$| main $tag|"
 fi
 echo "release: install locally with: make install"

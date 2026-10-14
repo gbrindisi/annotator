@@ -5,15 +5,20 @@ and `web/package.json` (kept in sync). Tags are `vX.Y.Z` on `main`.
 
 ## Remotes
 
-`main` and tags go to both codebahn and GitHub. `origin` fetches from codebahn and has two push
-URLs, so a plain `git push` (and the release script) updates both:
+A release is pushed to **every configured remote**: the script collects the push URLs of all
+remotes (`git remote get-url --push --all`), drops duplicates, and pushes `main` and the tag to
+each. Add or remove mirrors with plain git, no script changes needed:
 
 ```bash
-git remote set-url --add --push origin git@codebahn.net:g/annotator.git
-git remote set-url --add --push origin git@github-personal:gbrindisi/annotator.git
+git remote add mirror <url>                          # another remote
+git remote set-url --add --push origin <url>         # or an extra push URL on origin
 ```
 
-`github` is also a separate remote for fetching from GitHub directly.
+To have everyday `git push` hit all mirrors too, give `origin` one push URL per mirror (the
+second form above, once per URL; re-add the original URL first, since the first `--add --push`
+replaces the default).
+
+The "in sync" precondition is checked against `origin/main`.
 
 ## Day to day
 
@@ -36,7 +41,8 @@ tag is new and the changelog has unreleased entries. It then:
 3. runs `make lint`, `make build` (web UI + release binary) and `make test`, and checks that
    the built binary reports `annotator X.Y.Z`;
 4. commits `chore(release): vX.Y.Z`, creates the annotated tag `vX.Y.Z`;
-5. pushes `main` and the tag.
+5. pushes `main` and the tag to every remote (see above); with `RELEASE_PUSH=0` it prints
+   the push commands instead.
 
 If a step fails nothing is committed: fix, `git checkout -- .` to drop the partial bump, rerun.
 
