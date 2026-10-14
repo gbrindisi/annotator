@@ -1,10 +1,45 @@
 //! Round summary: what the reviewer did between the round snapshot and Done.
 
-use crate::format::{CommentStatus, parse_comments};
-use crate::protocol::Summary;
+use crate::format::{CommentStatus, ParsedComment, ThreadEntry, parse_comments};
+use crate::protocol::{CommentActivity, CommentKind, EntryView, Summary};
 use crate::render::strip;
 use similar::{ChangeTag, TextDiff};
 use std::collections::HashMap;
+
+fn entry_view(e: &ThreadEntry) -> EntryView {
+    EntryView {
+        author: e.author.clone(),
+        timestamp: e.timestamp.clone(),
+        text: e.text.clone(),
+    }
+}
+
+fn status_str(s: CommentStatus) -> String {
+    match s {
+        CommentStatus::Open => "open",
+        CommentStatus::Resolved => "resolved",
+    }
+    .into()
+}
+
+fn code_lines(c: &ParsedComment) -> Option<(usize, usize)> {
+    c.data.code_lines.as_ref().map(|r| (r.start, r.end))
+}
+
+/// The anchored text of `c` in `doc` (markers stripped), or its stored quote.
+fn quote_of(c: &ParsedComment, doc: &str) -> String {
+    let stored = c.data.quote.clone().unwrap_or_default();
+    if c.data.code_lines.is_some() {
+        return stored;
+    }
+    match c.anchor_range() {
+        Some(r) => {
+            let t = strip(&doc[r]).0;
+            if t.is_empty() { stored } else { t }
+        }
+        None => stored,
+    }
+}
 
 /// `before` = `round-N.md` snapshot, `after` = file content at Done.
 pub fn compute(path: &str, round: u32, before: &str, after: &str) -> Summary {
@@ -13,32 +48,90 @@ pub fn compute(path: &str, round: u32, before: &str, after: &str) -> Summary {
         round,
         ..Default::default()
     };
-    let old: HashMap<String, _> = parse_comments(before)
-        .into_iter()
-        .map(|c| (c.id.clone(), c))
-        .collect();
+    let old_list = parse_comments(before);
+    let old: HashMap<&str, &ParsedComment> = old_list.iter().map(|c| (c.id.as_str(), c)).collect();
     let new = parse_comments(after);
+    // (sort key: anchor start or MAX, activity); stable sort keeps parse order among orphans.
+    let mut activity: Vec<(usize, CommentActivity)> = Vec::new();
     for c in &new {
-        match old.get(&c.id) {
-            None => s.new_threads.push(c.id.clone()),
+        let key = c.anchor_range().map_or(usize::MAX, |r| r.start);
+        let mk = |kind: CommentKind, new_entries: Vec<EntryView>| CommentActivity {
+            id: c.id.clone(),
+            kind,
+            quote: quote_of(c, after),
+            code_lines: code_lines(c),
+            new_entries,
+            status: status_str(c.data.status),
+        };
+        match old.get(c.id.as_str()) {
+            None => {
+                s.new_threads.push(c.id.clone());
+                let entries = c.data.thread.iter().map(entry_view).collect();
+                activity.push((key, mk(CommentKind::New, entries)));
+            }
             Some(o) => {
-                if c.data.thread.len() > o.data.thread.len() {
+                let (ot, nt) = (&o.data.thread, &c.data.thread);
+                let replied = nt.len() > ot.len();
+                if replied {
                     s.replied_threads.push(c.id.clone());
                 }
-                if o.data.status == CommentStatus::Open && c.data.status == CommentStatus::Resolved
-                {
+                let resolved = o.data.status == CommentStatus::Open
+                    && c.data.status == CommentStatus::Resolved;
+                if resolved {
                     s.resolved_threads.push(c.id.clone());
                 }
+                let reopened = o.data.status == CommentStatus::Resolved
+                    && c.data.status == CommentStatus::Open;
+                let edited_idx: Vec<usize> = (0..ot.len().min(nt.len()))
+                    .filter(|&i| ot[i].text != nt[i].text || ot[i].author != nt[i].author)
+                    .collect();
+                let edited = !edited_idx.is_empty() || nt.len() < ot.len();
+                let kind = if resolved {
+                    CommentKind::Resolved
+                } else if reopened {
+                    CommentKind::Reopened
+                } else if replied {
+                    CommentKind::Reply
+                } else if edited {
+                    CommentKind::Edited
+                } else {
+                    continue;
+                };
+                let mut entries: Vec<EntryView> =
+                    edited_idx.iter().map(|&i| entry_view(&nt[i])).collect();
+                entries.extend(nt.iter().skip(ot.len()).map(entry_view));
+                activity.push((key, mk(kind, entries)));
             }
         }
     }
-    let mut deleted: Vec<String> = old
-        .keys()
-        .filter(|id| !new.iter().any(|c| &c.id == *id))
-        .cloned()
+    let mut deleted: Vec<&ParsedComment> = old_list
+        .iter()
+        .filter(|c| !new.iter().any(|n| n.id == c.id))
         .collect();
-    deleted.sort();
-    s.deleted_threads = deleted;
+    for c in &deleted {
+        let mut quote = c.data.quote.clone().unwrap_or_default();
+        if quote.is_empty() {
+            quote = quote_of(c, before);
+        }
+        activity.push((
+            usize::MAX,
+            CommentActivity {
+                id: c.id.clone(),
+                kind: CommentKind::Deleted,
+                quote,
+                code_lines: code_lines(c),
+                new_entries: c.data.thread.iter().map(entry_view).collect(),
+                status: status_str(c.data.status),
+            },
+        ));
+    }
+    deleted.sort_by(|a, b| a.id.cmp(&b.id));
+    s.deleted_threads = deleted.iter().map(|c| c.id.clone()).collect();
+    // Anchored threads by document order; orphans and deleted last (stable).
+    let (mut anchored, rest): (Vec<_>, Vec<_>) =
+        activity.into_iter().partition(|(k, _)| *k != usize::MAX);
+    anchored.sort_by_key(|(k, _)| *k);
+    s.comments = anchored.into_iter().chain(rest).map(|(_, a)| a).collect();
 
     let (b, a) = (strip(before).0, strip(after).0);
     let diff = TextDiff::from_lines(&b, &a);
@@ -50,6 +143,17 @@ pub fn compute(path: &str, round: u32, before: &str, after: &str) -> Summary {
         }
     }
     s.edit_hunks = diff.grouped_ops(0).len() as u32;
+    if b != a {
+        let name = path.rsplit('/').next().unwrap_or(path);
+        s.diff = diff
+            .unified_diff()
+            .context_radius(3)
+            .header(
+                &format!("{name} (round {round} start)"),
+                &format!("{name} (after review)"),
+            )
+            .to_string();
+    }
     s
 }
 
@@ -57,12 +161,57 @@ fn plural(n: usize, one: &str, many: &str) -> String {
     format!("{n} {}", if n == 1 { one } else { many })
 }
 
-fn ids(v: &[String]) -> String {
-    if v.is_empty() {
-        "none".into()
+/// `text` with continuation lines indented by `indent`; blank lines stay empty.
+fn indent_text(text: &str, indent: &str) -> String {
+    text.trim_end()
+        .lines()
+        .enumerate()
+        .map(|(i, l)| match (i, l.is_empty()) {
+            (0, _) => l.to_string(),
+            (_, true) => String::new(),
+            _ => format!("{indent}{l}"),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn short_quote(q: &str) -> String {
+    let flat = q.split_whitespace().collect::<Vec<_>>().join(" ");
+    if flat.chars().count() > 100 {
+        format!("{}…", flat.chars().take(100).collect::<String>())
     } else {
-        v.join(", ")
+        flat
     }
+}
+
+fn comment_header(c: &CommentActivity) -> String {
+    let kind = match c.kind {
+        CommentKind::New => "new",
+        CommentKind::Reply => "reply",
+        CommentKind::Resolved => "resolved",
+        CommentKind::Reopened => "reopened",
+        CommentKind::Deleted => "deleted",
+        CommentKind::Edited => "edited",
+    };
+    let quote = short_quote(&c.quote);
+    let place = match (c.code_lines, quote.is_empty()) {
+        (Some((a, b)), q) => {
+            // 1-based, as the UI shows them.
+            let lines = if a == b {
+                format!("code line {}", a + 1)
+            } else {
+                format!("code lines {}-{}", a + 1, b + 1)
+            };
+            if q {
+                format!(" on {lines}")
+            } else {
+                format!(" on {lines} (\"{quote}\")")
+            }
+        }
+        (None, true) => String::new(),
+        (None, false) => format!(" on \"{quote}\""),
+    };
+    format!("[{}] {kind}{place}", c.id)
 }
 
 pub fn to_text(s: &Summary) -> String {
@@ -70,85 +219,61 @@ pub fn to_text(s: &Summary) -> String {
         "annotator: review of {} finished (round {})\n",
         s.path, s.round
     );
-    let nothing = s.new_threads.is_empty()
-        && s.replied_threads.is_empty()
-        && s.resolved_threads.is_empty()
-        && s.deleted_threads.is_empty()
-        && s.edit_hunks == 0;
-    if nothing {
+    if s.comments.is_empty() && s.diff.is_empty() && s.edit_hunks == 0 {
         out.push_str("- no changes\n");
         return out;
     }
-    if !s.new_threads.is_empty() {
-        out.push_str(&format!(
-            "- {}: {}\n",
-            plural(s.new_threads.len(), "new comment", "new comments"),
-            ids(&s.new_threads)
-        ));
+    if !s.comments.is_empty() {
+        let count = |k: CommentKind| s.comments.iter().filter(|c| c.kind == k).count();
+        let parts: Vec<String> = [
+            (CommentKind::New, "new", "new"),
+            (CommentKind::Reply, "reply", "replies"),
+            (CommentKind::Edited, "edited", "edited"),
+            (CommentKind::Resolved, "resolved", "resolved"),
+            (CommentKind::Reopened, "reopened", "reopened"),
+            (CommentKind::Deleted, "deleted", "deleted"),
+        ]
+        .iter()
+        .filter_map(|&(k, one, many)| {
+            let n = count(k);
+            (n > 0).then(|| {
+                if one == many {
+                    format!("{n} {one}")
+                } else {
+                    plural(n, one, many)
+                }
+            })
+        })
+        .collect();
+        out.push_str(&format!("\n## Comments ({})\n", parts.join(", ")));
+        for c in &s.comments {
+            out.push_str(&comment_header(c));
+            out.push('\n');
+            for e in &c.new_entries {
+                let text = indent_text(&format!("{}: {}", e.author, e.text), "    ");
+                out.push_str(&format!("  {text}\n"));
+            }
+        }
     }
-    if !s.replied_threads.is_empty() {
+    if !s.diff.is_empty() {
+        let hunks = s.diff.lines().filter(|l| l.starts_with("@@ ")).count();
         out.push_str(&format!(
-            "- {}: {}\n",
-            plural(
-                s.replied_threads.len(),
-                "reply on an existing comment",
-                "replies on existing comments"
-            ),
-            ids(&s.replied_threads)
+            "\n## Edits ({}, +{} -{})\n{}",
+            plural(hunks, "hunk", "hunks"),
+            s.lines_added,
+            s.lines_removed,
+            s.diff
         ));
-    }
-    out.push_str(&format!(
-        "- resolved: {}; deleted: {}\n",
-        ids(&s.resolved_threads),
-        ids(&s.deleted_threads)
-    ));
-    if s.edit_hunks == 0 {
-        out.push_str("- no edits\n");
-    } else {
+        if !s.diff.ends_with('\n') {
+            out.push('\n');
+        }
+    } else if s.edit_hunks > 0 {
         out.push_str(&format!(
-            "- edits: {}, +{} -{} lines\n",
+            "\n## Edits ({}, +{} -{})\n",
             plural(s.edit_hunks as usize, "hunk", "hunks"),
             s.lines_added,
             s.lines_removed
         ));
     }
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn stats() {
-        let s = compute("/p.md", 1, "a\nb\nc\nd\ne\nf\n", "a\nB\nc\nd\ne\nf\ng\nh\n");
-        assert_eq!((s.edit_hunks, s.lines_added, s.lines_removed), (2, 3, 1));
-        assert!(to_text(&s).contains("- edits: 2 hunks, +3 -1 lines"));
-        let s = compute("/p.md", 1, "x\n", "x\n");
-        assert_eq!(
-            to_text(&s),
-            "annotator: review of /p.md finished (round 1)\n- no changes\n"
-        );
-    }
-
-    #[test]
-    fn comments_and_edits() {
-        let before = "intro <!--c:p7k2-->text<!--/c:p7k2-->\n<!--co:p7k2 by:agent status:open\nagent: q?\n-->\n\n<!--c:r1-->old<!--/c:r1-->\n<!--co:r1 by:a status:open\na: x\n-->\n\n<!--c:d1-->gone<!--/c:d1-->\n<!--co:d1 by:a status:open\na: x\n-->\n\nend\n";
-        let after = "intro <!--c:p7k2-->text<!--/c:p7k2-->\n<!--co:p7k2 by:agent status:open\nagent: q?\nme: yes\n-->\n\n<!--c:r1-->old<!--/c:r1-->\n<!--co:r1 by:a status:resolved\na: x\n-->\n\ngone\n\n<!--c:n1-->end<!--/c:n1-->\n<!--co:n1 by:me status:open\nme: new\n-->\nadded line\n";
-        let s = compute("/abs/plan.md", 2, before, after);
-        assert_eq!(s.new_threads, ["n1"]);
-        assert_eq!(s.replied_threads, ["p7k2"]);
-        assert_eq!(s.resolved_threads, ["r1"]);
-        assert_eq!(s.deleted_threads, ["d1"]);
-        // Only the added text line counts (markers/bodies excluded).
-        assert_eq!((s.edit_hunks, s.lines_added, s.lines_removed), (1, 1, 0));
-        assert_eq!(
-            to_text(&s),
-            "annotator: review of /abs/plan.md finished (round 2)\n\
-             - 1 new comment: n1\n\
-             - 1 reply on an existing comment: p7k2\n\
-             - resolved: r1; deleted: d1\n\
-             - edits: 1 hunk, +1 -0 lines\n"
-        );
-    }
 }

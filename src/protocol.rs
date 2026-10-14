@@ -47,6 +47,45 @@ pub struct Summary {
     pub edit_hunks: u32,
     pub lines_added: u32,
     pub lines_removed: u32,
+    /// Unified diff (3 lines of context) of the document with comment markers and bodies
+    /// stripped, from the round's start snapshot to the file at Done. Empty when no text edits.
+    /// Additive; absent from older daemons.
+    #[serde(default)]
+    pub diff: String,
+    /// Per thread touched this round, in document order of the anchor (orphans and deleted
+    /// threads last). Additive; absent from older daemons.
+    #[serde(default)]
+    pub comments: Vec<CommentActivity>,
+}
+
+/// What happened to one comment thread in a round. If several things happened to a thread, `kind`
+/// is the first that applies of: `deleted`, `new`, `resolved`, `reopened`, `reply`, `edited`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CommentKind {
+    New,
+    Reply,
+    Resolved,
+    Reopened,
+    Deleted,
+    /// An existing entry's text changed (or an entry was removed).
+    Edited,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CommentActivity {
+    pub id: String,
+    pub kind: CommentKind,
+    /// The anchored text as it is now; the stored quote for orphans, code comments and deleted
+    /// threads.
+    pub quote: String,
+    /// For code-block comments: 0-based inclusive lines within the block (as `CommentView`).
+    pub code_lines: Option<(usize, usize)>,
+    /// Entries added this round and entries whose text changed (new text). For `deleted`: the
+    /// last known entries.
+    pub new_entries: Vec<EntryView>,
+    /// `open` or `resolved` after the round (last known status for `deleted`).
+    pub status: String,
 }
 
 // ---------- browser <-> daemon (WebSocket, JSON) ----------
@@ -170,7 +209,7 @@ pub struct CommentView {
     pub new_thread: bool,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct EntryView {
     pub author: String,
     pub timestamp: Option<String>,
