@@ -820,3 +820,61 @@ async fn waiters_in_doc_and_no_wait_then_join() {
     ws.no_msg(300).await;
     assert_eq!(h.status().await.sessions[0].waiters, 0);
 }
+
+#[tokio::test]
+async fn replace_and_merge_blocks() {
+    let h = setup();
+    let raw = "# Plan\n\nWe <!--c:a1-->ship<!--/c:a1--> Friday.\n<!--co:a1 status:open\nme: sure?\n-->\n\n- one\n- two\n";
+    let file = h.file("blocks.md", raw);
+    let o = h.open(&file).await;
+    let mut ws = h.ws(&o.session_id).await;
+    let doc = ws.doc().await;
+    let html = doc["html"].as_str().unwrap();
+    assert!(html.contains("<p data-sourcepos=\"3:1-3:15\">"), "{html}");
+
+    // Stale hash: error + reloaded Doc, file untouched.
+    ws.send(
+        json!({"type":"replace_block","sourcepos":"3:1-3:15","markdown":"x","base_hash":"0000"}),
+    )
+    .await;
+    let e = ws.recv().await;
+    assert_eq!(
+        (e["type"].as_str(), e["reloaded"].as_bool()),
+        (Some("error"), Some(true))
+    );
+    assert_eq!(ws.recv().await["type"], "doc");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), raw);
+
+    // Unbalanced markers: plain error, file untouched.
+    ws.send(json!({"type":"replace_block","sourcepos":"3:1-3:15","markdown":"We <!--c:a1-->ship","base_hash":doc["hash"]}))
+        .await;
+    let e = ws.recv().await;
+    assert_eq!(
+        (e["type"].as_str(), e["reloaded"].as_bool()),
+        (Some("error"), Some(false))
+    );
+    assert!(e["message"].as_str().unwrap().contains("unbalanced"), "{e}");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), raw);
+
+    // Edit the paragraph: one Doc, only that block's bytes change.
+    let d = ws
+        .intent(json!({"type":"replace_block","sourcepos":"3:1-3:15",
+            "markdown":"We <!--c:a1-->ship<!--/c:a1--> on *Thursday*.","base_hash":doc["hash"]}))
+        .await;
+    let want = raw.replace("Friday.", "on *Thursday*.");
+    assert_eq!(d["raw"], want.as_str());
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), want);
+    assert_eq!(d["comments"][0]["orphaned"], false);
+
+    // Split a list item, then merge it back (tight list: li sourcepos).
+    let d = ws
+        .intent(json!({"type":"replace_block","sourcepos":"5:1-5:5","markdown":"one\n\nhalf","base_hash":d["hash"]}))
+        .await;
+    let split = want.replace("- one\n", "- one\n- half\n");
+    assert_eq!(d["raw"], split.as_str());
+    let d = ws
+        .intent(json!({"type":"merge_blocks","first":"5:1-5:5","second":"6:1-6:6","markdown":"onehalf","base_hash":d["hash"]}))
+        .await;
+    assert_eq!(d["raw"], want.replace("- one\n", "- onehalf\n").as_str());
+    ws.no_msg(300).await;
+}

@@ -132,6 +132,22 @@ pub enum ClientMsg {
         text: String,
         base_hash: String,
     },
+    /// Edit mode: replace the content of one rendered block (`data-sourcepos` of a paragraph,
+    /// heading, table cell or list item) with `markdown` (inline Markdown for that block only;
+    /// a blank line splits it into new blocks). Rejected if the file changed since `base_hash`.
+    ReplaceBlock {
+        sourcepos: String,
+        markdown: String,
+        base_hash: String,
+    },
+    /// Edit mode: Backspace at the start of block `second` merges it into the preceding block
+    /// `first`, whose new content is `markdown`.
+    MergeBlocks {
+        first: String,
+        second: String,
+        markdown: String,
+        base_hash: String,
+    },
     Done,
     Abandon,
 }

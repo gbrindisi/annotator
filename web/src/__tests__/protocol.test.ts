@@ -13,6 +13,8 @@ describe('client messages', () => {
     expect(msg.reopen('k')).toEqual({ type: 'reopen', id: 'k' });
     expect(msg.deleteThread('k')).toEqual({ type: 'delete_thread', id: 'k' });
     expect(msg.replaceSource('t', 'h')).toEqual({ type: 'replace_source', text: 't', base_hash: 'h' });
+    expect(msg.replaceBlock('1:1-1:5', 'md', 'h')).toEqual({ type: 'replace_block', sourcepos: '1:1-1:5', markdown: 'md', base_hash: 'h' });
+    expect(msg.mergeBlocks('1:1-1:5', '3:1-3:2', 'md', 'h')).toEqual({ type: 'merge_blocks', first: '1:1-1:5', second: '3:1-3:2', markdown: 'md', base_hash: 'h' });
     expect(msg.done()).toEqual({ type: 'done' });
     expect(msg.abandon()).toEqual({ type: 'abandon' });
   });

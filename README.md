@@ -44,8 +44,11 @@ The daemon (`annotator serve`) starts on demand and exits after 15 idle minutes.
 registered through `annotator open`.
 
 In the browser:
-- **Rendered** view: select text, click **Comment** (or Ctrl/Cmd-Alt-M). Click a highlight to focus
+- **Read** view: select text, click **Comment** (or Ctrl/Cmd-Alt-M). Click a highlight to focus
   its thread; click a thread's quote to jump to the text.
+- **Edit** view: type directly in the rendered document; each edited block is saved live as Markdown
+  for that block only (the rest of the file stays byte-identical, comment anchors are kept).
+  Ctrl/Cmd-B / I / E / K for bold, italic, code, link; code blocks and diagrams are edited in Source.
 - ` ```mermaid ` fences render as diagrams in a high-contrast theme (light and dark): click to zoom,
   hover for **Comment** (whole diagram) / **Source** (select lines to comment on them).
 - **Source** view: CodeMirror with comment markers hidden; edits autosave.

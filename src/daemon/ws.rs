@@ -5,6 +5,7 @@ use crate::format::{self, NewCommentInput};
 use crate::mapping::{MappingError, map_selection};
 use crate::protocol::{ClientMsg, ServerMsg};
 use crate::utf16;
+use crate::{blockedit, session};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -85,6 +86,21 @@ fn handle(app: &App, sess: &Sess, text: &str) -> Vec<ServerMsg> {
                 Err(ReplaceError::Other(e)) => vec![error(e, false)],
             }
         }
+        ClientMsg::ReplaceBlock {
+            sourcepos,
+            markdown,
+            base_hash,
+        } => block_edit(sess, &base_hash, |raw| {
+            blockedit::replace_block(raw, &sourcepos, &markdown)
+        }),
+        ClientMsg::MergeBlocks {
+            first,
+            second,
+            markdown,
+            base_hash,
+        } => block_edit(sess, &base_hash, |raw| {
+            blockedit::merge_blocks(raw, &first, &second, &markdown)
+        }),
         ClientMsg::Done | ClientMsg::Abandon => {
             let done = matches!(msg, ClientMsg::Done);
             match sess.finish(&app.home, done) {
@@ -100,6 +116,35 @@ fn handle(app: &App, sess: &Sess, text: &str) -> Vec<ServerMsg> {
             ],
             Err(ReplaceError::Other(e)) => vec![error(e, false)],
         },
+    }
+}
+
+/// Sentinel error from inside `apply_edit`: the file is not the one the browser edited.
+const STALE_HASH: &str = "\u{0}stale";
+
+/// Edit-mode intents: hash-checked like `replace_source`, then applied to the current text.
+fn block_edit(
+    sess: &Sess,
+    base_hash: &str,
+    edit: impl FnOnce(&str) -> Result<String, String>,
+) -> Vec<ServerMsg> {
+    let res = sess.apply_edit(|raw| {
+        if session::sha256_hex(raw.as_bytes()) != base_hash {
+            return Err(STALE_HASH.into());
+        }
+        edit(raw)
+    });
+    match res {
+        Ok(()) => vec![],
+        Err(ReplaceError::Conflict) => vec![
+            error("file changed on disk; reloaded", true),
+            sess.doc_msg(),
+        ],
+        Err(ReplaceError::Other(e)) if e == STALE_HASH => vec![
+            error("file changed on disk; reloaded", true),
+            sess.doc_msg(),
+        ],
+        Err(ReplaceError::Other(e)) => vec![error(e, false)],
     }
 }
 
@@ -165,8 +210,10 @@ fn apply_intent(raw: &str, msg: ClientMsg, home: &std::path::Path) -> Result<Str
         ClientMsg::Resolve { id } => format::set_resolved(raw, &id, true).map_err(e),
         ClientMsg::Reopen { id } => format::set_resolved(raw, &id, false).map_err(e),
         ClientMsg::DeleteThread { id } => format::delete_comment(raw, &id).map_err(e),
-        ClientMsg::ReplaceSource { .. } | ClientMsg::Done | ClientMsg::Abandon => {
-            Err("unexpected message".into())
-        }
+        ClientMsg::ReplaceSource { .. }
+        | ClientMsg::ReplaceBlock { .. }
+        | ClientMsg::MergeBlocks { .. }
+        | ClientMsg::Done
+        | ClientMsg::Abandon => Err("unexpected message".into()),
     }
 }

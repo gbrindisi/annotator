@@ -4,6 +4,7 @@
 //! summaries; the browser is a thin view that sends intents (`protocol::ClientMsg`).
 
 pub mod assets;
+pub mod blockedit;
 pub mod client;
 pub mod config;
 pub mod daemon;

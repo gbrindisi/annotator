@@ -2,6 +2,8 @@
 // the comment format, purely to fake what the daemon would push.
 import type { SocketFactory, SocketLike } from '../connection';
 import type { ClientMsg, CommentView, DocState, ServerMsg } from '../protocol';
+import { serializeBlock } from '../blockmd';
+import { prepareEditable } from '../editable';
 import { SAMPLE_HTML, SAMPLE_RAW } from './fixture';
 
 const hash = (s: string): string => {
@@ -92,6 +94,52 @@ export const wrapRange = (block: Element, offset: number, len: number, id: strin
   }
 };
 
+/** Dev-only inline Markdown -> HTML, just enough to show Edit mode results in the mock. */
+export const miniInline = (md: string): string => {
+  const out: string[] = [];
+  const re = /(<!--c:([A-Za-z0-9]+)-->)|(<!--\/c:[A-Za-z0-9]+-->)|(`+)([\s\S]*?)\4|\\\n|\\([!-/:-@[-`{-~])|(&lt;|&amp;)/g;
+  let last = 0;
+  const text = (t: string) =>
+    escapeHtml(t)
+      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/~~([^~]+)~~/g, '<del>$1</del>');
+  for (let m; (m = re.exec(md)); ) {
+    out.push(text(md.slice(last, m.index)));
+    last = m.index + m[0].length;
+    if (m[1]) out.push(`<mark data-cid="${m[2]}">`);
+    else if (m[3]) out.push('</mark>');
+    else if (m[4]) out.push(`<code>${escapeHtml(m[5].replace(/^ (.*) $/, '$1'))}</code>`);
+    else if (m[0] === '\\\n') out.push('<br />\n');
+    else if (m[6]) out.push(escapeHtml(m[6]));
+    else out.push(m[7] === '&lt;' ? '&lt;' : '&amp;');
+  }
+  out.push(text(md.slice(last)));
+  return out.join('');
+};
+
+/** The serializer's view of a rendered block (list items get their li-body wrapper). */
+const hostFor = (el: Element): Element => {
+  if (el.tagName !== 'LI') return el;
+  const tmp = document.createElement('ul');
+  tmp.append(el.cloneNode(true));
+  prepareEditable(tmp);
+  return tmp.querySelector('.li-body') ?? el;
+};
+
+/** Replace a rendered block's inline content (list items keep their nested lists). */
+const setInline = (el: Element, md: string): void => {
+  let html = miniInline(md);
+  if (el.tagName === 'LI') {
+    const task = /^\[([ xX])\] /.exec(md);
+    if (task) html = `<input type="checkbox"${task[1] === ' ' ? '' : ' checked=""'} disabled="" /> ` + miniInline(md.slice(task[0].length));
+    const blocks = Array.from(el.children).filter(c => /^(UL|OL|P|PRE|BLOCKQUOTE)$/.test(c.tagName));
+    el.innerHTML = html;
+    el.append(...blocks);
+  } else el.innerHTML = html;
+};
+
 class FakeDaemon {
   state: DocState;
   sockets = new Set<FakeSocket>();
@@ -130,6 +178,52 @@ class FakeDaemon {
     this.state.raw = raw;
     this.state.hash = hash(raw);
     this.state.marker_ranges = fakeMarkerRanges(raw);
+  }
+
+  private newLine = 9000;
+
+  /** Edit mode intents: update the fake render and (best effort) the raw text. */
+  private blockEdit(sp: string, markdown: string, second: string | null): boolean {
+    const s = this.state;
+    let raw = s.raw;
+    let ok = false;
+    this.editHtml(root => {
+      const el = root.querySelector(`[data-sourcepos="${sp}"]`);
+      if (!el) return;
+      const chunks = markdown.split(/\n[ \t]*\n/).filter(c => c.trim());
+      const oldMd = serializeBlock(hostFor(el)).replace(/^\[[ xX]\] /, '');
+      if (second) {
+        const el2 = root.querySelector(`[data-sourcepos="${second}"]`);
+        if (!el2) return;
+        const md2 = serializeBlock(hostFor(el2)).replace(/^\[[ xX]\] /, '');
+        const at = raw.indexOf(md2);
+        if (at >= 0) {
+          // Drop the second block's line(s); the merged text replaces the first block below.
+          const ls = raw.lastIndexOf('\n', at - 1) + 1;
+          raw = raw.slice(0, ls).replace(/\n+$/, '\n') + raw.slice(at + md2.length).replace(/^\n/, '');
+        }
+        el2.remove();
+      }
+      setInline(el, chunks[0] ?? '');
+      let after: Element = el;
+      for (const c of chunks.slice(1)) {
+        const n = document.createElement(el.tagName === 'LI' ? 'li' : 'p');
+        const line = ++this.newLine;
+        n.setAttribute('data-sourcepos', `${line}:1-${line}:${c.length}`);
+        setInline(n, c);
+        after.after(n);
+        after = n;
+      }
+      const content = (chunks[0] ?? '').replace(/^\[[ xX]\] /, '');
+      raw = oldMd && raw.includes(oldMd) ? raw.replace(oldMd, [content, ...chunks.slice(1)].join('\n\n')) : raw;
+      ok = true;
+    });
+    if (ok) {
+      const same = raw === s.raw;
+      this.setRaw(raw);
+      if (same) s.hash = hash(`${raw}#${++this.newLine}`); // the html changed: a new version either way
+    }
+    return ok;
   }
 
   private thread(id: string): CommentView | undefined {
@@ -210,6 +304,13 @@ class FakeDaemon {
       case 'replace_source': {
         if (m.base_hash !== s.hash) return this.error('The file changed on disk; your edit was not saved', true);
         this.setRaw(m.text);
+        break;
+      }
+      case 'replace_block':
+      case 'merge_blocks': {
+        if (m.base_hash !== s.hash) return this.error('The file changed on disk; your edit was not saved', true);
+        const ok = m.type === 'replace_block' ? this.blockEdit(m.sourcepos, m.markdown, null) : this.blockEdit(m.first, m.markdown, m.second);
+        if (!ok) return this.error('The selection refers to a block that no longer exists; the view may be stale.');
         break;
       }
       case 'done': {

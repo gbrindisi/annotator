@@ -18,6 +18,8 @@ export type ClientMsg =
   | { type: 'reopen'; id: string }
   | { type: 'delete_thread'; id: string }
   | { type: 'replace_source'; text: string; base_hash: string }
+  | { type: 'replace_block'; sourcepos: string; markdown: string; base_hash: string }
+  | { type: 'merge_blocks'; first: string; second: string; markdown: string; base_hash: string }
   | { type: 'done' }
   | { type: 'abandon' };
 
@@ -87,6 +89,8 @@ export const msg = {
   reopen: (id: string): ClientMsg => ({ type: 'reopen', id }),
   deleteThread: (id: string): ClientMsg => ({ type: 'delete_thread', id }),
   replaceSource: (text: string, baseHash: string): ClientMsg => ({ type: 'replace_source', text, base_hash: baseHash }),
+  replaceBlock: (sourcepos: string, markdown: string, baseHash: string): ClientMsg => ({ type: 'replace_block', sourcepos, markdown, base_hash: baseHash }),
+  mergeBlocks: (first: string, second: string, markdown: string, baseHash: string): ClientMsg => ({ type: 'merge_blocks', first, second, markdown, base_hash: baseHash }),
   done: (): ClientMsg => ({ type: 'done' }),
   abandon: (): ClientMsg => ({ type: 'abandon' }),
 };

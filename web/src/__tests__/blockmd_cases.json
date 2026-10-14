@@ -1,0 +1,314 @@
+[
+  {
+    "blocks": [
+      {
+        "markdown": "Plain paragraph with *em*, **strong**, ***both***, ~~strike~~ and `code`.",
+        "sourcepos": "1:1-1:73"
+      },
+      {
+        "markdown": "Code with ``a`b`` backticks and `` `x` `` padded.",
+        "sourcepos": "3:1-3:49"
+      },
+      {
+        "markdown": "Links: [text](https://example.com), [titled](https://e.com \"T\") and https://bare.example/path_x.",
+        "sourcepos": "5:1-5:96"
+      },
+      {
+        "markdown": "Image ![alt text](img.png) inline.",
+        "sourcepos": "7:1-7:34"
+      },
+      {
+        "markdown": "line one\\\nline two\nsoft three",
+        "sourcepos": "9:1-11:10"
+      }
+    ],
+    "html": "<p data-sourcepos=\"1:1-1:73\">Plain paragraph with <em data-sourcepos=\"1:22-1:25\">em</em>, <strong data-sourcepos=\"1:28-1:37\">strong</strong>, <em data-sourcepos=\"1:40-1:49\"><strong data-sourcepos=\"1:41-1:48\">both</strong></em>, <del data-sourcepos=\"1:52-1:61\">strike</del> and <code data-sourcepos=\"1:67-1:72\">code</code>.</p>\n<p data-sourcepos=\"3:1-3:49\">Code with <code data-sourcepos=\"3:11-3:17\">a`b</code> backticks and <code data-sourcepos=\"3:33-3:41\">`x`</code> padded.</p>\n<p data-sourcepos=\"5:1-5:96\">Links: <a data-sourcepos=\"5:8-5:34\" href=\"https://example.com\">text</a>, <a data-sourcepos=\"5:37-5:63\" href=\"https://e.com\" title=\"T\">titled</a> and <a data-sourcepos=\"5:69-5:95\" href=\"https://bare.example/path_x\">https://bare.example/path_x</a>.</p>\n<p data-sourcepos=\"7:1-7:34\">Image <img data-sourcepos=\"7:7-7:26\" src=\"img.png\" alt=\"alt text\" /> inline.</p>\n<p data-sourcepos=\"9:1-11:10\">line one<br data-sourcepos=\"9:9-9:10\" />\nline two\nsoft three</p>\n",
+    "name": "inline"
+  },
+  {
+    "blocks": [
+      {
+        "markdown": "Escapes: \\*not em\\*, 2 * 3, snake_case_name, a \\_b\\_ c, \\`tick\\`, 1 < 2, \\<div>, &lt;!-- no, [link\\](x), Tom & Jerry, \\&copy;, back\\slash, end\\\\.",
+        "sourcepos": "1:1-1:145"
+      },
+      {
+        "markdown": "\\# not a heading",
+        "sourcepos": "3:1-3:16"
+      },
+      {
+        "markdown": "\\- not a list",
+        "sourcepos": "5:1-5:13"
+      },
+      {
+        "markdown": "1\\. not ordered",
+        "sourcepos": "7:1-7:15"
+      },
+      {
+        "markdown": "\\> not a quote",
+        "sourcepos": "9:1-9:14"
+      },
+      {
+        "markdown": "\\~\\~not struck\\~\\~ and ~ alone",
+        "sourcepos": "11:1-11:30"
+      }
+    ],
+    "html": "<p data-sourcepos=\"1:1-1:145\">Escapes: *not em*, 2 * 3, snake_case_name, a _b_ c, `tick`, 1 &lt; 2, &lt;div&gt;, &lt;!-- no, [link](x), Tom &amp; Jerry, &amp;copy;, back\\slash, end\\.</p>\n<p data-sourcepos=\"3:1-3:16\"># not a heading</p>\n<p data-sourcepos=\"5:1-5:13\">- not a list</p>\n<p data-sourcepos=\"7:1-7:15\">1. not ordered</p>\n<p data-sourcepos=\"9:1-9:14\">&gt; not a quote</p>\n<p data-sourcepos=\"11:1-11:30\">~~not struck~~ and ~ alone</p>\n",
+    "name": "escapes"
+  },
+  {
+    "blocks": [
+      {
+        "markdown": "Title with `code` and *em*",
+        "sourcepos": "1:1-1:28"
+      },
+      {
+        "markdown": "Closed heading",
+        "sourcepos": "3:1-3:20"
+      },
+      {
+        "markdown": "Setext *heading*",
+        "sourcepos": "5:1-6:3"
+      }
+    ],
+    "html": "<h1 data-sourcepos=\"1:1-1:28\">Title with <code data-sourcepos=\"1:14-1:19\">code</code> and <em data-sourcepos=\"1:25-1:28\">em</em></h1>\n<h2 data-sourcepos=\"3:1-3:20\">Closed heading</h2>\n<h2 data-sourcepos=\"5:1-6:3\">Setext <em data-sourcepos=\"5:8-5:16\">heading</em></h2>\n",
+    "name": "headings"
+  },
+  {
+    "blocks": [
+      {
+        "markdown": "item *one*",
+        "sourcepos": "1:1-1:12"
+      },
+      {
+        "markdown": "[ ] task",
+        "sourcepos": "2:1-2:10"
+      },
+      {
+        "markdown": "[x] done task\ncontinued",
+        "sourcepos": "3:1-6:0"
+      },
+      {
+        "markdown": "nested **bold**",
+        "sourcepos": "5:3-5:19"
+      },
+      {
+        "markdown": "first",
+        "sourcepos": "7:1-7:8"
+      },
+      {
+        "markdown": "second",
+        "sourcepos": "8:1-9:0"
+      },
+      {
+        "markdown": "loose a",
+        "sourcepos": "10:3-10:9"
+      },
+      {
+        "markdown": "loose b",
+        "sourcepos": "12:3-12:9"
+      },
+      {
+        "markdown": "second para",
+        "sourcepos": "14:3-14:13"
+      },
+      {
+        "markdown": "[x] loose task",
+        "sourcepos": "16:7-16:16"
+      },
+      {
+        "markdown": "[ ] other",
+        "sourcepos": "18:7-18:11"
+      }
+    ],
+    "html": "<ul data-sourcepos=\"1:1-5:19\">\n<li data-sourcepos=\"1:1-1:12\">item <em data-sourcepos=\"1:8-1:12\">one</em></li>\n<li data-sourcepos=\"2:1-2:10\"><input type=\"checkbox\" disabled=\"\" /> task</li>\n<li data-sourcepos=\"3:1-6:0\"><input type=\"checkbox\" checked=\"\" disabled=\"\" /> done task\ncontinued\n<ul data-sourcepos=\"5:3-5:19\">\n<li data-sourcepos=\"5:3-5:19\">nested <strong data-sourcepos=\"5:12-5:19\">bold</strong></li>\n</ul>\n</li>\n</ul>\n<ol data-sourcepos=\"7:1-8:9\">\n<li data-sourcepos=\"7:1-7:8\">first</li>\n<li data-sourcepos=\"8:1-9:0\">second</li>\n</ol>\n<ul data-sourcepos=\"10:1-14:13\">\n<li data-sourcepos=\"10:1-10:9\">\n<p data-sourcepos=\"10:3-10:9\">loose a</p>\n</li>\n<li data-sourcepos=\"12:1-15:0\">\n<p data-sourcepos=\"12:3-12:9\">loose b</p>\n<p data-sourcepos=\"14:3-14:13\">second para</p>\n</li>\n</ul>\n<ul data-sourcepos=\"16:1-18:11\">\n<li data-sourcepos=\"16:1-16:16\"><input type=\"checkbox\" checked=\"\" disabled=\"\" /> \n<p data-sourcepos=\"16:7-16:16\">loose task</p>\n</li>\n<li data-sourcepos=\"18:1-18:11\"><input type=\"checkbox\" disabled=\"\" /> \n<p data-sourcepos=\"18:7-18:11\">other</p>\n</li>\n</ul>\n",
+    "name": "lists"
+  },
+  {
+    "blocks": [
+      {
+        "markdown": "quoted *text*\nsecond line",
+        "sourcepos": "1:3-2:13"
+      },
+      {
+        "markdown": "deeper",
+        "sourcepos": "4:5-4:10"
+      }
+    ],
+    "html": "<blockquote data-sourcepos=\"1:1-4:10\">\n<p data-sourcepos=\"1:3-2:13\">quoted <em data-sourcepos=\"1:10-1:15\">text</em>\nsecond line</p>\n<blockquote data-sourcepos=\"4:3-4:10\">\n<p data-sourcepos=\"4:5-4:10\">deeper</p>\n</blockquote>\n</blockquote>\n",
+    "name": "quote"
+  },
+  {
+    "blocks": [
+      {
+        "markdown": "a",
+        "sourcepos": "1:2-1:4"
+      },
+      {
+        "markdown": "b \\| c",
+        "sourcepos": "1:6-1:13"
+      },
+      {
+        "markdown": "`x\\|y`",
+        "sourcepos": "3:2-3:9"
+      },
+      {
+        "markdown": "[l](u)",
+        "sourcepos": "3:11-3:18"
+      },
+      {
+        "markdown": "Café 🎉",
+        "sourcepos": "4:2-4:13"
+      },
+      {
+        "markdown": "**B**",
+        "sourcepos": "4:15-4:21"
+      }
+    ],
+    "html": "<table data-sourcepos=\"1:1-4:22\">\n<thead>\n<tr data-sourcepos=\"1:1-1:14\">\n<th data-sourcepos=\"1:2-1:4\">a</th>\n<th data-sourcepos=\"1:6-1:13\">b | c</th>\n</tr>\n</thead>\n<tbody>\n<tr data-sourcepos=\"3:1-3:19\">\n<td data-sourcepos=\"3:2-3:9\"><code data-sourcepos=\"3:3-3:7\">x|y</code></td>\n<td data-sourcepos=\"3:11-3:18\"><a data-sourcepos=\"3:12-3:17\" href=\"u\">l</a></td>\n</tr>\n<tr data-sourcepos=\"4:1-4:22\">\n<td data-sourcepos=\"4:2-4:13\">Café 🎉</td>\n<td data-sourcepos=\"4:15-4:21\"><strong data-sourcepos=\"4:16-4:20\">B</strong></td>\n</tr>\n</tbody>\n</table>\n",
+    "name": "table"
+  },
+  {
+    "blocks": [
+      {
+        "markdown": "Text <!--c:aa1-->anchored *partly<!--/c:aa1-->* and **<!--c:bb2-->bold<!--/c:bb2-->** end.",
+        "sourcepos": "1:1-1:40"
+      },
+      {
+        "markdown": "Use <!--c:cc3-->`the code`<!--/c:cc3--> here, <!--c:dd4-->across [a link](x) and<!--/c:dd4--> on.",
+        "sourcepos": "3:1-3:47"
+      },
+      {
+        "markdown": "<!--c:ee5-->list<!--/c:ee5--> item",
+        "sourcepos": "5:1-5:11"
+      }
+    ],
+    "html": "<p data-sourcepos=\"1:1-1:40\">Text <mark data-cid=\"aa1\">anchored </mark><em data-sourcepos=\"1:15-1:22\"><mark data-cid=\"aa1\">partly</mark></em> and <strong data-sourcepos=\"1:28-1:35\"><mark data-cid=\"bb2\">bold</mark></strong> end.</p>\n<p data-sourcepos=\"3:1-3:47\">Use <code data-sourcepos=\"3:5-3:14\"><mark data-cid=\"cc3\">the code</mark></code> here, <mark data-cid=\"dd4\">across </mark><a data-sourcepos=\"3:29-3:39\" href=\"x\"><mark data-cid=\"dd4\">a link</mark></a><mark data-cid=\"dd4\"> and</mark> on.</p>\n<ul data-sourcepos=\"5:1-5:11\">\n<li data-sourcepos=\"5:1-5:11\"><mark data-cid=\"ee5\">list</mark> item</li>\n</ul>\n",
+    "name": "comments"
+  },
+  {
+    "blocks": [
+      {
+        "markdown": "Café 🎉 *crème* — “quotes” and ñ.",
+        "sourcepos": "1:1-1:44"
+      }
+    ],
+    "html": "<p data-sourcepos=\"1:1-1:44\">Café 🎉 <em data-sourcepos=\"1:12-1:19\">crème</em> — “quotes” and ñ.</p>\n",
+    "name": "unicode"
+  },
+  {
+    "blocks": [
+      {
+        "markdown": "Release plan",
+        "sourcepos": "1:1-1:14"
+      },
+      {
+        "markdown": "Select any text and right-click to leave a comment. Comments are stored in this file as HTML comments.",
+        "sourcepos": "3:1-3:102"
+      },
+      {
+        "markdown": "We should <!--c:k3f9-->ship on Friday<!--/c:k3f9--> regardless of the QA timeline, because the release window closes Monday.",
+        "sourcepos": "5:1-5:97"
+      },
+      {
+        "markdown": "Here is a second paragraph with <!--c:a7b2-->another highlighted span<!--/c:a7b2--> placed close to the first.",
+        "sourcepos": "7:1-7:83"
+      },
+      {
+        "markdown": "And a third point that is already <!--c:zz1q-->resolved<!--/c:zz1q-->.",
+        "sourcepos": "9:1-9:43"
+      },
+      {
+        "markdown": "Code",
+        "sourcepos": "11:1-11:7"
+      },
+      {
+        "markdown": "This body has no anchor any more.",
+        "sourcepos": "18:1-18:33"
+      },
+      {
+        "markdown": "Example syntax in a fence is ignored:",
+        "sourcepos": "20:1-20:37"
+      }
+    ],
+    "html": "<h1 data-sourcepos=\"1:1-1:14\">Release plan</h1>\n<p data-sourcepos=\"3:1-3:102\">Select any text and right-click to leave a comment. Comments are stored in this file as HTML comments.</p>\n<p data-sourcepos=\"5:1-5:97\">We should <mark data-cid=\"k3f9\">ship on Friday</mark> regardless of the QA timeline, because the release window closes Monday.</p>\n<p data-sourcepos=\"7:1-7:83\">Here is a second paragraph with <mark data-cid=\"a7b2\">another highlighted span</mark> placed close to the first.</p>\n<p data-sourcepos=\"9:1-9:43\">And a third point that is already <mark data-cid=\"zz1q\">resolved</mark>.</p>\n<h2 data-sourcepos=\"11:1-11:7\">Code</h2>\n<pre data-sourcepos=\"13:1-16:3\"><code class=\"language-python\">def process(order):\n    validate(order)\n</code></pre>\n<p data-sourcepos=\"18:1-18:33\">This body has no anchor any more.</p>\n<p data-sourcepos=\"20:1-20:37\">Example syntax in a fence is ignored:</p>\n<pre data-sourcepos=\"22:1-27:3\"><code class=\"language-markdown\">&lt;!--c:ex01--&gt;example span&lt;!--/c:ex01--&gt;\n&lt;!--co:ex01 status:open\nme: not a real comment\n--&gt;\n</code></pre>\n",
+    "name": "sample.md"
+  },
+  {
+    "blocks": [
+      {
+        "markdown": "Release plan",
+        "sourcepos": "1:1-1:14"
+      },
+      {
+        "markdown": "Select any text and right-click to leave a comment. Comments are stored in this file as HTML comments.",
+        "sourcepos": "3:1-3:102"
+      },
+      {
+        "markdown": "We should <!--c:k3f9-->ship on Friday<!--/c:k3f9--> regardless of the QA timeline, because the release window closes Monday.",
+        "sourcepos": "5:1-5:97"
+      },
+      {
+        "markdown": "Here is a second paragraph with <!--c:a7b2-->another highlighted span<!--/c:a7b2--> placed close to the first.",
+        "sourcepos": "7:1-7:83"
+      },
+      {
+        "markdown": "And a third point that is already <!--c:zz1q-->resolved<!--/c:zz1q-->.",
+        "sourcepos": "9:1-9:43"
+      },
+      {
+        "markdown": "Code",
+        "sourcepos": "11:1-11:7"
+      },
+      {
+        "markdown": "This body has no anchor any more.",
+        "sourcepos": "18:1-18:33"
+      },
+      {
+        "markdown": "Example syntax in a fence is ignored:",
+        "sourcepos": "20:1-20:37"
+      },
+      {
+        "markdown": "Diagrams",
+        "sourcepos": "29:1-29:11"
+      },
+      {
+        "markdown": "Mermaid fences render as diagrams. Hover one for **Comment** / **Source**; click it to zoom.",
+        "sourcepos": "31:1-31:92"
+      },
+      {
+        "markdown": "Flowchart",
+        "sourcepos": "33:1-33:13"
+      },
+      {
+        "markdown": "Sequence diagram",
+        "sourcepos": "50:1-50:20"
+      },
+      {
+        "markdown": "Class diagram",
+        "sourcepos": "69:1-69:17"
+      },
+      {
+        "markdown": "State diagram",
+        "sourcepos": "92:1-92:17"
+      },
+      {
+        "markdown": "ER diagram",
+        "sourcepos": "108:1-108:14"
+      },
+      {
+        "markdown": "Pie chart",
+        "sourcepos": "126:1-126:13"
+      },
+      {
+        "markdown": "Gantt chart",
+        "sourcepos": "136:1-136:15"
+      },
+      {
+        "markdown": "An invalid diagram",
+        "sourcepos": "150:1-150:22"
+      }
+    ],
+    "html": "<h1 data-sourcepos=\"1:1-1:14\">Release plan</h1>\n<p data-sourcepos=\"3:1-3:102\">Select any text and right-click to leave a comment. Comments are stored in this file as HTML comments.</p>\n<p data-sourcepos=\"5:1-5:97\">We should <mark data-cid=\"k3f9\">ship on Friday</mark> regardless of the QA timeline, because the release window closes Monday.</p>\n<p data-sourcepos=\"7:1-7:83\">Here is a second paragraph with <mark data-cid=\"a7b2\">another highlighted span</mark> placed close to the first.</p>\n<p data-sourcepos=\"9:1-9:43\">And a third point that is already <mark data-cid=\"zz1q\">resolved</mark>.</p>\n<h2 data-sourcepos=\"11:1-11:7\">Code</h2>\n<pre data-sourcepos=\"13:1-16:3\"><code class=\"language-python\">def process(order):\n    validate(order)\n</code></pre>\n<p data-sourcepos=\"18:1-18:33\">This body has no anchor any more.</p>\n<p data-sourcepos=\"20:1-20:37\">Example syntax in a fence is ignored:</p>\n<pre data-sourcepos=\"22:1-27:3\"><code class=\"language-markdown\">&lt;!--c:ex01--&gt;example span&lt;!--/c:ex01--&gt;\n&lt;!--co:ex01 status:open\nme: not a real comment\n--&gt;\n</code></pre>\n<h2 data-sourcepos=\"29:1-29:11\">Diagrams</h2>\n<p data-sourcepos=\"31:1-31:92\">Mermaid fences render as diagrams. Hover one for <strong data-sourcepos=\"31:50-31:60\">Comment</strong> / <strong data-sourcepos=\"31:64-31:73\">Source</strong>; click it to zoom.</p>\n<h3 data-sourcepos=\"33:1-33:13\">Flowchart</h3>\n<pre data-sourcepos=\"35:1-48:3\"><code class=\"language-mermaid\">flowchart LR\n  subgraph Browser\n    A[Reviewer] --&gt;|selects text| B(Annotator UI)\n  end\n  subgraph Daemon\n    C{Valid comment?} --&gt;|yes| D[Write markers into the file]\n    C --&gt;|no| E[Show an error]\n  end\n  B --&gt;|WebSocket intent| C\n  D --&gt;|Doc update| B\n  classDef ok fill:#dcfce7,stroke:#15803d\n  class D ok\n</code></pre>\n<h3 data-sourcepos=\"50:1-50:20\">Sequence diagram</h3>\n<pre data-sourcepos=\"52:1-67:3\"><code class=\"language-mermaid\">sequenceDiagram\n  autonumber\n  actor R as Reviewer\n  participant UI as Browser UI\n  participant D as Daemon\n  participant F as File\n  R-&gt;&gt;UI: Select text, add comment\n  UI-&gt;&gt;D: add_comment\n  activate D\n  D-&gt;&gt;F: Insert markers\n  Note right of F: Comments live in the Markdown file\n  D--&gt;&gt;UI: Doc (html + comments)\n  deactivate D\n  UI--&gt;&gt;R: Highlight and sidebar card\n</code></pre>\n<h3 data-sourcepos=\"69:1-69:17\">Class diagram</h3>\n<pre data-sourcepos=\"71:1-90:3\"><code class=\"language-mermaid\">classDiagram\n  class Session {\n    +String id\n    +int round\n    +open_round()\n    +finish(done)\n  }\n  class DocState {\n    +String html\n    +CommentView[] comments\n  }\n  class CommentView {\n    +String id\n    +String status\n    +String block_sourcepos\n  }\n  Session --&gt; DocState : builds\n  DocState &quot;1&quot; *-- &quot;many&quot; CommentView\n</code></pre>\n<h3 data-sourcepos=\"92:1-92:17\">State diagram</h3>\n<pre data-sourcepos=\"94:1-106:3\"><code class=\"language-mermaid\">stateDiagram-v2\n  [*] --&gt; Active\n  Active --&gt; Closed : Done\n  Closed --&gt; Active : Agent starts next round\n  Active --&gt; Abandoned : Abandon\n  Abandoned --&gt; [*]\n  state Active {\n    [*] --&gt; Reviewing\n    Reviewing --&gt; Editing : switch to Source\n    Editing --&gt; Reviewing : autosave\n  }\n</code></pre>\n<h3 data-sourcepos=\"108:1-108:14\">ER diagram</h3>\n<pre data-sourcepos=\"110:1-124:3\"><code class=\"language-mermaid\">erDiagram\n  SESSION ||--o{ ROUND : has\n  ROUND ||--o{ THREAD : contains\n  THREAD ||--|{ ENTRY : holds\n  THREAD {\n    string id PK\n    string status\n    string quote\n  }\n  ENTRY {\n    string author\n    string text\n  }\n</code></pre>\n<h3 data-sourcepos=\"126:1-126:13\">Pie chart</h3>\n<pre data-sourcepos=\"128:1-134:3\"><code class=\"language-mermaid\">pie showData title Review comments by kind\n  &quot;Anchored text&quot; : 24\n  &quot;Code blocks&quot; : 9\n  &quot;Orphaned&quot; : 3\n  &quot;Replies&quot; : 17\n</code></pre>\n<h3 data-sourcepos=\"136:1-136:15\">Gantt chart</h3>\n<pre data-sourcepos=\"138:1-148:3\"><code class=\"language-mermaid\">gantt\n  title Review plan\n  dateFormat YYYY-MM-DD\n  section Draft\n  Write plan      :done, a1, 2026-06-01, 4d\n  Review round 1  :active, a2, after a1, 3d\n  section Ship\n  Fix findings    :crit, b1, after a2, 4d\n  Release         :milestone, b2, after b1, 0d\n</code></pre>\n<h3 data-sourcepos=\"150:1-150:22\">An invalid diagram</h3>\n<pre data-sourcepos=\"152:1-157:3\"><code class=\"language-mermaid\">flowchart LR\n  A --&gt; B\n  B --&gt;&gt; C\n  C[unclosed\n</code></pre>\n",
+    "name": "mermaid.md"
+  }
+]
